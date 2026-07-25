@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AgentForge — Multi-Agent AI Research Assistant. Specialized AI agents collaborate to research, scrape, analyze, and report on any topic.">
+    <title>AgentForge — Multi-Agent AI Research Assistant</title>
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- ============================================================
+             Header / Navbar
+             ============================================================ -->
+        <header class="header" id="app-header">
+            <div class="header-brand">
+                <span class="header-logo">⚡</span>
+                <div>
+                    <div class="header-title">AgentForge</div>
+                    <div class="header-subtitle">Multi-Agent AI Research Assistant</div>
+                </div>
+            </div>
+
+            <div class="header-status" id="system-status">
+                <span class="status-dot idle" id="status-dot"></span>
+                <span id="status-text">System Ready</span>
+            </div>
+        </header>
+
+        <!-- ============================================================
+             Main Content
+             ============================================================ -->
+        <main class="main-content">
+            <!-- Primary Content Area -->
+            <div class="content-primary">
+                <!-- ============================================================
+                     Research Mode Container
+                     ============================================================ -->
+                <div id="research-mode">
+                    <!-- Research Input Card -->
+                    <section class="glass-card research-input-section" id="research-input-card">
+                        <div class="card-header">
+                            <h1 class="card-title">
+                                <span class="icon">🔬</span>
+                                New Research
+                            </h1>
+                            <span class="card-badge">4 Agents Ready</span>
+                        </div>
+
+                        <form class="research-form" id="research-form">
+                            <div class="input-group">
+                                <label for="topic-input">Research Topic / Question</label>
+                                <textarea
+                                    id="topic-input"
+                                    class="research-input"
+                                    placeholder="Enter your research topic or question... (e.g., 'Latest trends in AI agents and their enterprise applications')"
+                                    rows="3"
+                                    required
+                                ></textarea>
+                            </div>
+
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label>Research Depth</label>
+                                    <div class="depth-selector">
+                                        <div class="depth-option">
+                                            <input type="radio" name="depth" id="depth-quick" value="quick">
+                                            <label for="depth-quick">
+                                                <span class="depth-name">⚡ Quick</span>
+                                                <span class="depth-desc">~1 min • 3 aspects</span>
+                                            </label>
+                                        </div>
+                                        <div class="depth-option">
+                                            <input type="radio" name="depth" id="depth-detailed" value="detailed" checked>
+                                            <label for="depth-detailed">
+                                                <span class="depth-name">📋 Detailed</span>
+                                                <span class="depth-desc">~2 min • 5-7 aspects</span>
+                                            </label>
+                                        </div>
+                                        <div class="depth-option">
+                                            <input type="radio" name="depth" id="depth-deep" value="deep">
+                                            <label for="depth-deep">
+                                                <span class="depth-name">🔬 Deep Dive</span>
+                                                <span class="depth-desc">~4 min • 8-10 aspects</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-submit" id="submit-btn">
+                                <span class="spinner"></span>
+                                <span class="btn-text">🚀 Launch Research Crew</span>
+                            </button>
+                        </form>
+                    </section>
+
+                    <!-- Agent Activity Panel -->
+                    <section class="glass-card agents-panel" id="agents-panel" style="display: none;">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <span class="icon">🤖</span>
+                                Agent Activity
+                            </h2>
+                            <span class="card-badge" id="activity-count">0 actions</span>
+                        </div>
+
+                        <!-- Agent Cards Grid -->
+                        <div class="agents-grid" id="agents-grid">
+                            <div class="agent-card" id="agent-strategist" style="--agent-color: #3b82f6;">
+                                <div class="agent-card-header">
+                                    <div class="agent-avatar">🔍</div>
+                                    <div>
+                                        <div class="agent-name">Research Strategist</div>
+                                        <div class="agent-role">Plans research methodology</div>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <span class="agent-status-dot"></span>
+                                    <span class="agent-status-text">Waiting...</span>
+                                </div>
+                            </div>
+
+                            <div class="agent-card" id="agent-scraper" style="--agent-color: #10b981;">
+                                <div class="agent-card-header">
+                                    <div class="agent-avatar">🌐</div>
+                                    <div>
+                                        <div class="agent-name">Web Scraper</div>
+                                        <div class="agent-role">Gathers web data</div>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <span class="agent-status-dot"></span>
+                                    <span class="agent-status-text">Waiting...</span>
+                                </div>
+                            </div>
+
+                            <div class="agent-card" id="agent-analyst" style="--agent-color: #f59e0b;">
+                                <div class="agent-card-header">
+                                    <div class="agent-avatar">📊</div>
+                                    <div>
+                                        <div class="agent-name">Data Analyst</div>
+                                        <div class="agent-role">Analyzes & structures data</div>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <span class="agent-status-dot"></span>
+                                    <span class="agent-status-text">Waiting...</span>
+                                </div>
+                            </div>
+
+                            <div class="agent-card" id="agent-writer" style="--agent-color: #8b5cf6;">
+                                <div class="agent-card-header">
+                                    <div class="agent-avatar">📝</div>
+                                    <div>
+                                        <div class="agent-name">Report Writer</div>
+                                        <div class="agent-role">Synthesizes final report</div>
+                                    </div>
+                                </div>
+                                <div class="agent-status">
+                                    <span class="agent-status-dot"></span>
+                                    <span class="agent-status-text">Waiting...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Timeline -->
+                        <div class="card-title" style="margin-bottom: var(--space-sm); font-size: 0.85rem;">
+                            <span class="icon">📡</span>
+                            Live Activity Feed
+                        </div>
+                        <div class="activity-timeline" id="activity-timeline">
+                            <!-- Timeline items added dynamically -->
+                        </div>
+                    </section>
+
+                    <!-- Report Viewer -->
+                    <section class="glass-card report-section" id="report-section">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <span class="icon">📄</span>
+                                Research Report
+                            </h2>
+                            <div class="report-actions">
+                                <button class="btn-action" id="btn-copy-report" title="Copy to clipboard">
+                                    📋 Copy
+                                </button>
+                                <button class="btn-action" id="btn-download-report" title="Download as Markdown">
+                                    ⬇️ Download
+                                </button>
+                            </div>
+                        </div>
+                        <div class="report-toolbar">
+                            <div class="report-meta" id="report-meta">
+                                <!-- Filled dynamically -->
+                            </div>
+                        </div>
+                        <div class="report-body" id="report-body">
+                            <!-- Rendered markdown report -->
+                        </div>
+                    </section>
+
+                    <!-- Welcome State -->
+                    <section class="glass-card welcome-state" id="welcome-state">
+                        <div class="welcome-icon">⚡</div>
+                        <h2 class="welcome-title">Welcome to AgentForge</h2>
+                        <p class="welcome-desc">
+                            Enter a research topic above and watch 4 specialized AI agents
+                            collaborate in real-time to produce a comprehensive research report.
+                        </p>
+                        <div class="welcome-features">
+                            <div class="welcome-feature">
+                                <span class="feature-icon">🔍</span>
+                                <span>Strategic research planning</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">🌐</span>
+                                <span>Live web data scraping</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">📊</span>
+                                <span>Intelligent data analysis</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">📝</span>
+                                <span>Professional report generation</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+
+
+
+
+            </div>
+
+            <aside class="content-sidebar">
+                <!-- Research History -->
+                <div class="glass-card" id="history-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span class="icon">📚</span>
+                            Research History
+                        </h2>
+                    </div>
+                    <div class="history-list" id="history-list">
+                        <div class="history-empty">
+                            <div class="empty-icon">📭</div>
+                            <p>No research sessions yet.<br>Start your first research above!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span class="icon">⚙️</span>
+                            System Info
+                        </h2>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Framework</span>
+                            <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 0.75rem;">CrewAI</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>LLM</span>
+                            <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 0.75rem;">GPT-OSS 20B (Free)</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Agents</span>
+                            <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 0.75rem;">4 Specialized</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Process</span>
+                            <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 0.75rem;">Sequential Pipeline</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- JavaScript Modules -->
+    <script src="/static/js/agents-panel.js"></script>
+    <script src="/static/js/report-viewer.js"></script>
+    <script src="/static/js/app.js"></script>
+
+    <!-- Document Analyzer Logic -->
+    <script>
+    // ─── State ───────────────────────────────────────────────────────────────
+    let currentMode   = 'research';
+    let currentDocId  = null;
+    let currentDocName = null;
+
+    // ─── Mode Switch ─────────────────────────────────────────────────────────
+    const ALL_MODES = ['research', 'document'];
+
+    window.switchMode = function(mode) {
+        currentMode = mode;
+        ALL_MODES.forEach(m => {
+            const btn = document.getElementById('mode-' + m);
+            if (btn) btn.classList.toggle('active', mode === m);
+
+            const view = document.getElementById(m + '-mode');
+            if (view) {
+                view.style.display = (mode === m) ? 'block' : 'none';
+            }
+        });
+    };
+    const switchMode = window.switchMode;
+
+    // ─── Universal File Attachment Helper ────────────────────────────────────
+    async function attachFileToTextarea(event, targetTextareaId, badgeId) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const badge = document.getElementById(badgeId);
+        if (badge) {
+            badge.style.display = 'block';
+            badge.textContent = `⏳ Uploading & reading ${file.name}...`;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const resp = await fetch('/api/documents/upload', { method: 'POST', body: formData });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Upload failed');
+            }
+
+            const data = await resp.json();
+            const textarea = document.getElementById(targetTextareaId);
+
+            // Read text preview from file or upload data
+            let fileContent = '';
+            try {
+                fileContent = await file.text();
+            } catch (e) {
+                fileContent = `File: ${data.filename} (${data.chunk_count} chunks indexed)`;
+            }
+
+            if (textarea) {
+                const snippet = fileContent.length > 2500 ? fileContent.slice(0, 2500) + '\n... [truncated]' : fileContent;
+                textarea.value = (textarea.value.trim() ? textarea.value.trim() + '\n\n' : '') +
+                    `[ATTACHED DOCUMENT CONTEXT: ${file.name}]\n${snippet}`;
+            }
+
+            if (badge) {
+                badge.textContent = `✅ Attached: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            }
+            showToast(`✅ Attached '${file.name}' as agent context!`, 'success');
+        } catch (err) {
+            if (badge) badge.textContent = `❌ Attachment error: ${err.message}`;
+            showToast(`❌ Attachment error: ${err.message}`, 'error');
+        }
+    }
+
+    // ─── Image Generation Handler ───────────────────────────────────────────
+    async function handleImageGenSubmit(e) {
+        e.preventDefault();
+        const promptInput = document.getElementById('image-prompt');
+        const prompt = promptInput ? promptInput.value.trim() : '';
+        if (!prompt) return;
+
+        const box = document.getElementById('image-result-box');
+        const spinner = document.getElementById('image-loading-spinner');
+        const img = document.getElementById('generated-image-preview');
+        const actions = document.getElementById('image-actions');
+        const link = document.getElementById('image-download-link');
+
+        box.style.display = 'block';
+        spinner.style.display = 'block';
+        img.style.display = 'none';
+        actions.style.display = 'none';
+
+        try {
+            const resp = await fetch('/api/tools/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Image generation failed');
+            }
+
+            const data = await resp.json();
+            img.src = data.image_url;
+            img.style.display = 'inline-block';
+            link.href = data.image_url;
+            actions.style.display = 'flex';
+            showToast('✨ AI Image generated successfully!', 'success');
+        } catch (err) {
+            showToast('❌ ' + err.message, 'error');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+    // ─── Specialized Code / Writing / Presentation Handlers ─────────────────
+    async function handleCodeSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('code-prompt');
+        const prompt = input ? input.value.trim() : '';
+        if (!prompt) return;
+
+        const box = document.getElementById('code-result-box');
+        const spinner = document.getElementById('code-spinner');
+        const output = document.getElementById('code-output');
+
+        box.style.display = 'block';
+        spinner.style.display = 'block';
+        output.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/tools/code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).detail || 'Failed');
+            const data = await resp.json();
+            output.innerHTML = marked.parse ? marked.parse(data.result) : data.result;
+            showToast('🚀 Code Copilot generated response!', 'success');
+        } catch (err) {
+            output.innerHTML = '❌ ' + err.message;
+            showToast('❌ ' + err.message, 'error');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+    async function handleWritingSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('writing-prompt');
+        const prompt = input ? input.value.trim() : '';
+        if (!prompt) return;
+
+        const box = document.getElementById('writing-result-box');
+        const spinner = document.getElementById('writing-spinner');
+        const output = document.getElementById('writing-output');
+
+        box.style.display = 'block';
+        spinner.style.display = 'block';
+        output.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/tools/writing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).detail || 'Failed');
+            const data = await resp.json();
+            output.innerHTML = marked.parse ? marked.parse(data.result) : data.result;
+            showToast('✍️ Content polished successfully!', 'success');
+        } catch (err) {
+            output.innerHTML = '❌ ' + err.message;
+            showToast('❌ ' + err.message, 'error');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+    async function handlePresentationSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('presentation-prompt');
+        const prompt = input ? input.value.trim() : '';
+        if (!prompt) return;
+
+        const box = document.getElementById('presentation-result-box');
+        const spinner = document.getElementById('presentation-spinner');
+        const output = document.getElementById('presentation-output');
+
+        box.style.display = 'block';
+        spinner.style.display = 'block';
+        output.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/tools/presentation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+            });
+            if (!resp.ok) throw new Error((await resp.json()).detail || 'Failed');
+            const data = await resp.json();
+            output.innerHTML = marked.parse ? marked.parse(data.result) : data.result;
+            showToast('📊 Slide deck outline generated!', 'success');
+        } catch (err) {
+            output.innerHTML = '❌ ' + err.message;
+            showToast('❌ ' + err.message, 'error');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    }
+
+    // ─── Drag & Drop ─────────────────────────────────────────────────────────
+    function triggerFileInput(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const input = document.getElementById('file-input');
+        if (input) input.click();
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        document.getElementById('upload-zone').classList.add('drag-over');
+    }
+    function handleDragLeave(e) {
+        document.getElementById('upload-zone').classList.remove('drag-over');
+    }
+    function handleFileDrop(e) {
+        e.preventDefault();
+        document.getElementById('upload-zone').classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) uploadFile(file);
+    }
+    function handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (file) uploadFile(file);
+        e.target.value = '';
+    }
+
+    // ─── Upload ──────────────────────────────────────────────────────────────
+    async function uploadFile(file) {
+        const zone     = document.getElementById('upload-zone');
+        const progress = document.getElementById('upload-progress');
+        const fill     = document.getElementById('progress-fill');
+        const label    = document.getElementById('progress-label');
+
+        zone.style.display    = 'none';
+        progress.style.display = 'flex';
+        label.textContent     = 'Uploading & parsing...';
+
+        // Animate progress bar
+        let pct = 0;
+        const ticker = setInterval(() => {
+            pct = Math.min(pct + 3, 85);
+            fill.style.width = pct + '%';
+        }, 200);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const resp = await fetch('/api/documents/upload', { method: 'POST', body: formData });
+            clearInterval(ticker);
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Upload failed');
+            }
+
+            const data = await resp.json();
+            fill.style.width  = '100%';
+            label.textContent = 'Processing complete!';
+
+            currentDocId   = data.doc_id;
+            currentDocName = data.filename;
+
+            setTimeout(() => {
+                progress.style.display = 'none';
+                showDocInfo(data);
+                document.getElementById('doc-qa-section').style.display = 'block';
+                document.getElementById('doc-chat-history').innerHTML = `
+                    <div class="doc-chat-welcome">
+                        <div class="chat-welcome-icon">🤖</div>
+                        <div class="chat-welcome-text">
+                            <b>${data.filename}</b> loaded successfully!<br>
+                            ${data.chunk_count} chunks indexed · ${data.has_tables ? '📊 Tables detected — math is enabled!' : '📝 Text document ready'}
+                            <br><span class="chat-welcome-sub">Ask me anything about this document.</span>
+                        </div>
+                    </div>`;
+                showToast('✅ Document ready! Ask your first question.', 'success');
+            }, 600);
+
+        } catch (err) {
+            clearInterval(ticker);
+            progress.style.display = 'none';
+            zone.style.display     = 'block';
+            showToast('❌ ' + err.message, 'error');
+        }
+    }
+
+    function showDocInfo(data) {
+        const icons = { pdf:'📕', csv:'📊', xlsx:'📗', xls:'📗', docx:'📘', txt:'📄' };
+        const sizes = (data.file_size / 1024).toFixed(1) + ' KB';
+        document.getElementById('doc-info-icon').textContent = icons[data.file_type] || '📄';
+        document.getElementById('doc-info-name').textContent = data.filename;
+        document.getElementById('doc-info-meta').textContent =
+            `${data.file_type.toUpperCase()} · ${sizes} · ${data.chunk_count} chunks · ${ data.has_tables ? 'Tables ✓' : 'Text only' }`;
+        document.getElementById('doc-info-bar').style.display = 'flex';
+    }
+
+    async function deleteCurrentDoc() {
+        if (!currentDocId) return;
+        if (!confirm('Remove this document?')) return;
+        await fetch(`/api/documents/${currentDocId}`, { method: 'DELETE' });
+        currentDocId = null; currentDocName = null;
+        document.getElementById('doc-info-bar').style.display   = 'none';
+        document.getElementById('upload-zone').style.display    = 'block';
+        document.getElementById('doc-qa-section').style.display = 'none';
+        document.getElementById('file-input').value = '';
+        showToast('Document removed', 'info');
+    }
+
+    // ─── Q&A ─────────────────────────────────────────────────────────────────
+    async function submitDocQuestion(e) {
+        e.preventDefault();
+        if (!currentDocId) { showToast('Please upload a document first', 'warning'); return; }
+
+        const input   = document.getElementById('doc-question-input');
+        const question = input.value.trim();
+        if (!question) return;
+
+        appendChatBubble('user', question);
+        input.value = '';
+
+        const btn     = document.getElementById('btn-doc-ask');
+        const spinner = document.getElementById('doc-spinner');
+        const askText = document.getElementById('doc-ask-text');
+        btn.disabled = true; spinner.style.display = 'inline-block'; askText.textContent = '...';
+
+        const thinkingId = appendChatBubble('assistant', '<em>Analyzing document...</em>', true);
+
+        try {
+            const resp = await fetch(`/api/documents/${currentDocId}/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question }),
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Query failed');
+            }
+
+            const data = await resp.json();
+            updateChatBubble(thinkingId, data.answer, data.sources, data.computation_steps);
+
+        } catch (err) {
+            updateChatBubble(thinkingId, '❌ ' + err.message, [], null);
+        } finally {
+            btn.disabled = false; spinner.style.display = 'none'; askText.textContent = 'Ask →';
+        }
+    }
+
+    let _bubbleCounter = 0;
+    function appendChatBubble(role, html, isTemp = false) {
+        const id      = 'bubble-' + (++_bubbleCounter);
+        const history = document.getElementById('doc-chat-history');
+        const div     = document.createElement('div');
+        div.id        = id;
+        div.className = `chat-bubble chat-bubble-${role}`;
+        div.innerHTML = role === 'user'
+            ? `<div class="bubble-role">You</div><div class="bubble-content">${html}</div>`
+            : `<div class="bubble-role">🤖 Document Agent</div><div class="bubble-content" id="${id}-content">${html}</div>`;
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+        return id;
+    }
+
+    function updateChatBubble(id, answer, sources, steps) {
+        const content = document.getElementById(id + '-content');
+        if (!content) return;
+        let html = marked.parse ? marked.parse(answer) : answer;
+        if (steps) {
+            html += `<div class="computation-steps"><strong>🔢 Computation Steps:</strong><pre>${steps}</pre></div>`;
+        }
+        if (sources && sources.length) {
+            html += `<div class="source-chips"><strong>📎 Sources:</strong> `;
+            sources.slice(0,3).forEach((s, i) => {
+                html += `<span class="source-chip" title="${s.chunk}">Chunk ${i+1} (${Math.round(s.score*100)}% match)</span>`;
+            });
+            html += `</div>`;
+        }
+        content.innerHTML = html;
+        document.getElementById('doc-chat-history').scrollTop = 9999;
+    }
+
+    function showToast(msg, type='info') {
+        // Re-use existing toast system if available
+        if (window.showToast) { window.showToast(msg, type); return; }
+        const c = document.getElementById('toast-container');
+        const t = document.createElement('div');
+        t.className = `toast toast-${type}`;
+        t.textContent = msg;
+        c.appendChild(t);
+        setTimeout(() => t.remove(), 4000);
+    }
+    </script>
+</body>
+</html>

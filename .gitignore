@@ -1,0 +1,27 @@
+# Environment variables & secrets
+.env
+*.env
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python cache & build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# SQLite & ChromaDB
+*.db
+agentforge.db
+chroma_db/
+uploads/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
