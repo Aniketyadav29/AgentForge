@@ -94,13 +94,13 @@ Rather than relying on a single monolithic LLM prompt, AgentForge coordinates a 
 │     CrewAI Research Pipeline          │                   │      Document RAG & Math Engine       │
 │                                       │                   │                                       │
 │  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
-│  │ 🔍 Research Strategist          │  │                   │  │ 📄 File Parser                 │  │
-│  │ (Deconstructs & Plans Query)    │  │                   │  │ (PDF, DOCX, CSV, XLSX, TXT)       │  │
+│  │ 🔍 Research Strategist          │  │                   │  │ 📄 File Parser                  │  │
+│  │ (Deconstructs & Plans Query)    │  │                   │  │ (PDF, DOCX, CSV, XLSX, TXT)     │  │
 │  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
 │                   │                   │                   │                   │                   │
 │                   ▼                   │                   │                   ▼                   │
 │  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
-│  │ 🌐 Web Research Specialist       │  │                   │  │ 🗄️ ChromaDB Vector Store        │  │
+│  │ 🌐 Web Research Specialist      │  │                   │  │ 🗄️ ChromaDB Vector Store        │  │
 │  │ (Serper Google Search & Scrape) │  │                   │  │ (Fast TF-IDF Hashing Embeddings)│  │
 │  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
 │                   │                   │                   │                   │                   │
