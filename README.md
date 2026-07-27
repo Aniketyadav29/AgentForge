@@ -1,37 +1,83 @@
-# ⚡ AgentForge — Autonomous Multi-Agent AI Research Assistant
+# ⚡ AgentForge — Autonomous Multi-Agent AI System & Document RAG Platform
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version" />
   <img src="https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI Framework" />
   <img src="https://img.shields.io/badge/CrewAI-Orchestration-FF6B6B?style=for-the-badge&logo=ai&logoColor=white" alt="CrewAI Orchestration" />
+  <img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6F00?style=for-the-badge&logo=databricks&logoColor=white" alt="ChromaDB" />
   <img src="https://img.shields.io/badge/Groq-Llama%203.3%2070B-f05138?style=for-the-badge&logo=groq&logoColor=white" alt="Groq Llama 3.3" />
   <img src="https://img.shields.io/badge/Google%20Gemini-2.0%20Flash-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white" alt="Google Gemini" />
+  <img src="https://img.shields.io/badge/SQLite-Persistence-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
 </p>
 
 <p align="center">
-  An enterprise-grade, autonomous <b>Multi-Agent AI System</b> where specialized AI agents collaborate in a sequential pipeline to research any topic, perform live web search & scraping, analyze complex data, and produce executive-ready markdown reports — streamed live to a modern dashboard via Server-Sent Events (SSE).
+  An enterprise-grade, autonomous <b>Multi-Agent AI System</b> and <b>Document RAG Platform</b> where specialized AI agents collaborate in sequential pipelines to research complex topics, perform live web search & scraping, process multi-format documents (PDF, DOCX, CSV, XLSX, TXT), execute grounded vector RAG search & Pandas mathematical computations, and produce executive-ready markdown reports — streamed live via Server-Sent Events (SSE).
 </p>
+
+<p align="center">
+  <a href="#-overview">Overview</a> •
+  <a href="#-key-features">Key Features</a> •
+  <a href="#%EF%B8%8F-system-architecture">System Architecture</a> •
+  <a href="#-the-multi-agent-crew">Multi-Agent Crew</a> •
+  <a href="#-document-rag--math-engine">Document RAG & Math</a> •
+  <a href="#-technology-stack">Tech Stack</a> •
+  <a href="#-environment-variables-configuration">Configuration</a> •
+  <a href="#-quick-start--installation">Quick Start</a> •
+  <a href="#-api-reference">API Reference</a> •
+  <a href="#-repository-structure">Repo Structure</a> •
+  <a href="#-troubleshooting--faqs">FAQ</a>
+</p>
+
+---
+
+## 📖 Overview
+
+**AgentForge** is an end-to-end, state-of-the-art Multi-Agent Autonomous Research & Document Intelligence Platform built on **CrewAI**, **FastAPI**, **ChromaDB**, and **Groq/Gemini/OpenRouter LLMs**.
+
+Rather than relying on a single monolithic LLM prompt, AgentForge coordinates a team of specialized AI agents—each possessing distinct roles, goals, backstories, and specialized tools. Whether conducting comprehensive market research, synthesizing web intelligence across dozens of live sources, or performing vector search and deterministic mathematical computations on multi-format enterprise files (PDF, DOCX, CSV, XLSX, TXT), AgentForge delivers structured, fact-checked, executive-level reports in real time.
 
 ---
 
 ## 🌟 Key Features
 
-- 🤖 **4 Specialized Autonomous AI Agents**:
-  - **Research Strategist**: Deconstructs complex queries into actionable research plans.
-  - **Web Research Specialist**: Conducts live web searches and extracts data using Serper & Scrape tools.
-  - **Data Analyst**: Fact-checks findings, builds side-by-side comparison tables, and structures data.
-  - **Report Writer**: Synthesizes analysis into a 6-part executive markdown report.
- 
-    
-- ⚡ **Multi-Tier Model Fallback & Resiliency**: Automatic failover between **Groq (Llama 3.3 70B, Llama 3.1 8B, Gemma 2 9B)** and **Google Gemini 2.0 Flash** to prevent 429 rate limits or daily quota shutdowns.
-- 📡 **Real-Time Agent Activity Streaming**: Server-Sent Events (SSE) stream every step, tool invocation, and status update live to the web frontend.
-- 🎯 **Multi-Depth Execution Modes**:
-  - **Quick**: 2 tasks (`~1 min` • 3 aspects)
-  - **Detailed**: 3 tasks (`~2 min` • 5-7 aspects)
-  - **Deep Dive**: 4 tasks (`~4 min` • 8-10 aspects)
-- 💾 **Persistent SQLite Research History**: Store, view, search, copy, or download previous research reports.
-- 🎨 **Glassmorphism Dark-Mode Dashboard**: Sleek, responsive web UI built with modern HTML5, Vanilla CSS, and JavaScript.
+### 🤖 1. Autonomous 4-Agent Research Crew
+* **Research Strategist**: Analyzes the research topic, decomposes queries into sub-questions, and formulates a multi-vector research plan.
+* **Web Research Specialist**: Conducts targeted live Google searches via `SerperDevTool` and scrapes web page content with `ScrapeWebsiteTool`.
+* **Data Analyst**: Categorizes raw research, fact-checks web findings, detects patterns, and synthesizes structured comparison matrices.
+* **Report Writer**: Compiles analyzed findings into a 6-part executive report (800-1200 words) complete with practical recommendations and cited source links.
+
+### 📄 2. Intelligent Document RAG & Math Engine
+* **Multi-Format Ingestion**: Native parsing for `.pdf`, `.docx`, `.csv`, `.xlsx`, and `.txt` files.
+* **Isolated Vector Stores**: Each uploaded file receives its own isolated ChromaDB collection to prevent cross-document data leakage.
+* **API-Free Fast Embeddings**: Implements a zero-cost `FastTFIDFEmbeddingFunction` using Scikit-Learn `HashingVectorizer` (L2 norm) that runs 100% locally without PyTorch or C++ runtime DLL dependencies.
+* **Deterministic Math Tool**: Features a custom Pandas-driven `MathComputationTool`. The Document Agent **never estimates math**—it executes exact Python arithmetic expressions for sums, averages, row filtering, min/max, and statistical distributions over tabular data.
+
+### ⚡ 3. Multi-Tier Model Fallback & Resiliency
+* **Auto-Failover Pool**: Intelligent candidate model ordering across **Groq (Llama 3.3 70B, Llama 3.1 8B, Gemma 2 9B, Llama 3.2 Vision, Mixtral 8x7B, DeepSeek R1, Qwen 2.5)** and **OpenRouter Free Models**.
+* **Rate-Limit & Cooldown Management**: Automatically captures `429 Rate Limit` / `413 / Quota Exceeded` errors, parses server retry delays, applies exponential backoff, and temporarily quarantines exhausted models for 60-second cooldowns before falling over.
+
+### 🌐 4. Multilingual Intelligence Engine
+* Automatic language detection supporting **Hinglish** (Hindi + English mix), **Hindi** (Devanagari), **Spanish**, **French**, **German**, **Japanese**, **Korean**, **Portuguese**, **Italian**, **Arabic**, **Chinese**, **Bengali**, **Tamil**, **Telugu**, **Marathi**, and **Urdu**.
+* Enforces strict language output across headings, tables, body text, and recommendations.
+
+### 📡 5. Real-Time Server-Sent Events (SSE) Streaming
+* Streams agent thoughts, search queries, scraping steps, tool invocations, and completion states live to the web frontend using `sse-starlette` without requiring page reloads or main thread blocking.
+
+### 🎯 6. Multi-Depth Execution Modes
+* **Quick Mode** (`~1 min` • 2 Tasks): Ultra-fast execution pipeline (Scraper → Writer).
+* **Detailed Mode** (`~2 min` • 3 Tasks): Balanced execution pipeline (Scraper → Analyst → Writer) covering 5-7 core aspects.
+* **Deep Dive Mode** (`~4 min` • 4 Tasks): Exhaustive pipeline (Strategist → Scraper → Analyst → Writer) addressing 8-10 aspects, sub-questions, and edge cases.
+
+### 🎨 7. Modern Glassmorphic Dark-Mode Dashboard
+* Built with pure HTML5, Vanilla CSS3, and ES6 JavaScript (Zero heavy node frameworks).
+* Features tab navigation between **AI Research Studio** and **Document Analyzer**, live agent activity streams, interactive report viewers, session history controls, and file export/copy capabilities.
+
+### 🖼️ 8. Dynamic AI Image Generation
+* Integrated free image generation tool powered by Pollinations AI for embedding high-resolution visual graphics into generated reports.
+
+### 💾 9. Persistent SQLite Database
+* Stores session metadata, task statuses, execution durations, agent thought logs, generated reports, document upload histories, and vector chunk statistics in `agentforge.db`.
 
 ---
 
@@ -39,63 +85,136 @@
 
 ```
                                   ┌─────────────────────────────┐
-                                  │      User Research Query    │
+                                  │   User Query / Document     │
                                   └──────────────┬──────────────┘
                                                  │
-                                                 ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                CrewAI Multi-Agent Pipeline                              │
-│                                                                                         │
-│  ┌──────────────────────┐    ┌──────────────────────┐    ┌───────────────────────────┐  │
-│  │  Research Strategist │───►│ Web Research Specialist│──►│        Data Analyst      │  │
-│  │  (Plans Methodology) │    │  (Search & Scrape)   │    │ (Categorizes & Fact-Checks│  │
-│  └──────────────────────┘    └──────────────────────┘    └─────────────┬─────────────┘  │
-│                                                                        │                │
-│                                                                        ▼                │
-│                                                              ┌───────────────────┐      │
-│                                                              │   Report Writer   │      │
-│                                                              │  (Synthesizes)    │      │
-│                                                              └─────────┬─────────┘      │
-└────────────────────────────────────────────────────────────────────────┼────────────────┘
-                                                                         │
-                                                                         ▼
-                                                       ┌──────────────────────────────────┐
-                                                       │ Executive Markdown Research Guide│
-                                                       └──────────────────────────────────┘
+                   ┌─────────────────────────────┴─────────────────────────────┐
+                   ▼                                                           ▼
+┌───────────────────────────────────────┐                   ┌───────────────────────────────────────┐
+│     CrewAI Research Pipeline          │                   │      Document RAG & Math Engine       │
+│                                       │                   │                                       │
+│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
+│  │ 🔍 Research Strategist          │  │                   │  │ 📄 File Parser                 │  │
+│  │ (Deconstructs & Plans Query)    │  │                   │  │ (PDF, DOCX, CSV, XLSX, TXT)       │  │
+│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
+│                   │                   │                   │                   │                   │
+│                   ▼                   │                   │                   ▼                   │
+│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
+│  │ 🌐 Web Research Specialist       │  │                   │  │ 🗄️ ChromaDB Vector Store        │  │
+│  │ (Serper Google Search & Scrape) │  │                   │  │ (Fast TF-IDF Hashing Embeddings)│  │
+│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
+│                   │                   │                   │                   │                   │
+│                   ▼                   │                   │                   ▼                   │
+│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
+│  │ 📊 Data Analyst                 │  │                   │  │ 🧠 Document Specialist Agent    │  │
+│  │ (Fact-Checks & Matrices)        │  │                   │  │ (Vector Search + Pandas Math)   │  │
+│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
+│                   │                   │                   │                   │                   │
+│                   ▼                   │                   └───────────────────┼───────────────────┘
+│  ┌─────────────────────────────────┐  │                                       │
+│  │ 📝 Report Writer                │  │                                       │
+│  │ (Synthesizes Markdown Report)   │  │                                       │
+│  └────────────────┬────────────────┘  │                                       │
+└───────────────────┼───────────────────┘                                       │
+                    │                                                           │
+                    └─────────────────────────────┬─────────────────────────────┘
+                                                  │
+                                                  ▼
+                               ┌─────────────────────────────────────┐
+                               │  FastAPI Backend & SSE Streaming    │
+                               └──────────────────┬──────────────────┘
+                                                  │
+                                                  ▼
+                               ┌─────────────────────────────────────┐
+                               │ Glassmorphic Dark-Mode UI Dashboard │
+                               └─────────────────────────────────────┘
 ```
 
 ---
 
 ## 🤖 The Multi-Agent Crew
 
-| Agent | Icon | Role & Description | Capabilities & Tools |
-| :--- | :---: | :--- | :--- |
-| **Research Strategist** | 🔍 | Formulates the multi-vector research plan and key questions to investigate. | High-level reasoning, query decomposition. |
-| **Web Research Specialist** | 🌐 | Conducts targeted Google searches, scrapes web pages, and extracts facts. | `SerperDevTool`, `ScrapeWebsiteTool`. |
-| **Data Analyst** | 📊 | Fact-checks findings, structures data, and builds comparison matrices. | Markdown table synthesis, fact-checking. |
-| **Report Writer** | 📝 | Compiles all findings into a structured 6-section executive report. | Executive synthesis, report formatting. |
+| Agent | Icon | Primary Role | Description & Responsibilities | Assigned Tools |
+| :--- | :---: | :--- | :--- | :--- |
+| **Research Strategist** | 🔍 | Research Director | Formulates research methodology, decomposes topics into core sub-questions, and defines outline structure. | High-Level Reasoning |
+| **Web Research Specialist** | 🌐 | OSINT Collector | Executes Google searches, scrapes target web pages, extracts key statistics, and tracks source URLs. | `TruncatedSerperTool`, `TruncatedScrapeTool` |
+| **Data Analyst** | 📊 | Information Structurer | Groups raw web data into categories, builds comparative matrices, validates facts, and identifies key trends. | Markdown Matrix Builder |
+| **Report Writer** | 📝 | Executive Synthesizer | Compiles all findings into a structured 6-part executive report with clear headings and actionable recommendations. | Report Formatting Engine |
+| **Document Specialist** | 📑 | Grounded QA & Math | Answers questions strictly based on uploaded document vector context and performs math calculations. | `VectorSearchTool`, `MathComputationTool` |
+
+---
+
+## 📄 Document RAG & Math Engine
+
+The **Document Analyzer** pipeline processes complex files with complete accuracy:
+
+```
+[ Upload File ] ──► [ Text/Table Extraction ] ──► [ Overlapping Chunking ] ──► [ ChromaDB Ingestion ]
+                                                                                      │
+[ User Question ] ◄── [ Grounded Answer Synthesis ] ◄── [ Vector Retrieval / Math ] ◄──┘
+```
+
+### Key Technical Capabilities:
+1. **Multi-Format Extraction**:
+   - `.pdf`: Extracted using `pypdf`, retaining section boundaries.
+   - `.docx`: Extracted via `python-docx`, maintaining paragraph and header structures.
+   - `.csv` & `.xlsx`: Ingested into Pandas DataFrames, extracting schema summaries and numerical column metrics.
+   - `.txt`: Clean text chunking with 50-word overlaps.
+2. **Exact Mathematical Computation**:
+   When users ask numerical or analytical questions (*e.g., "What was the total expenditure in 2023?"* or *"What is the mean value of column B?"*), the Document Agent invokes the `MathComputationTool`, executing real Python Pandas arithmetic expressions rather than generating approximate text estimates.
 
 ---
 
 ## 🛠️ Technology Stack
 
-- **Orchestration**: [CrewAI](https://crewai.com) (Multi-agent process automation)
-- **LLM Infrastructure**: [Groq API](https://groq.com) (`Llama 3.3 70B Versatile`, `Llama 3.1 8B Instant`, `Gemma 2 9B`) & [Google Gemini 2.0 Flash](https://ai.google.dev)
-- **Backend Framework**: [FastAPI](https://fastapi.tiangolo.com) (Async Python web server)
-- **Real-Time Streaming**: Server-Sent Events (SSE via `sse-starlette`)
-- **Database**: SQLite3 (Research history persistence)
-- **Vector Search / RAG**: ChromaDB & Scikit-Learn Fast Hashing Vectorizer
-- **Frontend**: Vanilla HTML5, CSS3 Glassmorphic Design System, ES6 JavaScript
+| Category | Technologies |
+| :--- | :--- |
+| **Backend & Server** | Python 3.10+, FastAPI, Uvicorn, Asyncio, Threading |
+| **Agent Framework** | CrewAI (Sequential Process Engine, Step & Task Callbacks) |
+| **LLM Infrastructure** | Groq API (`Llama 3.3 70B`, `Llama 3.1 8B`, `Gemma 2 9B`), OpenRouter, Google Gemini |
+| **Vector DB & RAG** | ChromaDB (Persistent Storage), Scikit-Learn `HashingVectorizer` (Fast TF-IDF) |
+| **Document Parsing** | Pandas, PyPDF, python-docx, openpyxl |
+| **Database & Storage** | SQLite3 (`agentforge.db`), Local Disk Storage (`uploads/`) |
+| **Search & Scraping** | SerperDev API (`google-search-results`), ScrapeWebsiteTool |
+| **Streaming** | Server-Sent Events (`sse-starlette`) |
+| **Frontend UI** | HTML5, Vanilla CSS3 (Glassmorphic Design System), Modern Vanilla JavaScript |
+
+---
+
+## ⚙️ Environment Variables Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+# Required Primary API Keys
+GROQ_API_KEY=gsk_your_groq_api_key_here
+SERPER_API_KEY=your_serper_api_key_here
+
+# LLM Selection (Default: groq/llama-3.3-70b-versatile)
+MODEL_NAME=groq/llama-3.3-70b-versatile
+
+# Optional Resiliency Backup API Keys
+GEMINI_API_KEY=your_gemini_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Telemetry Opt-Out
+ANONYMIZED_TELEMETRY=False
+CREWAI_TELEMETRY_OPT_OUT=true
+```
+
+> [!TIP]
+> **API Key Setup Links**:
+> - Get a free Groq API key at **[console.groq.com](https://console.groq.com)**
+> - Get a free Serper Search key (2,500 free queries) at **[serper.dev](https://serper.dev)**
+> - Get a free Gemini API key at **[aistudio.google.com](https://aistudio.google.com)**
 
 ---
 
 ## 🚀 Quick Start & Installation
 
 ### 1. Prerequisites
-- **Python 3.10** or higher
-- **Groq API Key**: Get a free key at [console.groq.com](https://console.groq.com)
-- **Serper API Key**: Get a free search key (2,500 queries) at [serper.dev](https://serper.dev)
-- **Gemini API Key** *(Optional)*: Get a free key at [aistudio.google.com](https://aistudio.google.com)
+* **Python 3.10** or higher
+* **Git**
 
 ### 2. Clone the Repository
 ```bash
@@ -104,55 +223,70 @@ cd AgentForge
 ```
 
 ### 3. Create & Activate Virtual Environment
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
 
-# macOS / Linux
-python3 -m venv venv
-source venv/bin/activate
-```
+* **On Windows (PowerShell/CMD):**
+  ```powershell
+  python -m venv venv
+  .\venv\Scripts\activate
+  ```
+
+* **On macOS / Linux:**
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate
+  ```
 
 ### 4. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Configure Environment Variables
-Create or update the `.env` file in the root directory:
-```env
-GROQ_API_KEY=your_groq_api_key_here
-MODEL_NAME=groq/llama-3.3-70b-versatile
-GEMINI_API_KEY=your_gemini_api_key_here
-SERPER_API_KEY=your_serper_api_key_here
-ANONYMIZED_TELEMETRY=False
-```
-
-### 6. Launch the Server
+### 5. Launch the FastAPI Server
 ```bash
 python main.py
 ```
+*or using uvicorn directly:*
+```bash
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
 
-### 7. Access Dashboard
-Open your web browser and navigate to:
+### 6. Access the Dashboard
+Open your browser and navigate to:
 ```
 http://localhost:8000
 ```
+Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
 
 ---
 
-## 📡 API Endpoints
+## 📡 API Reference
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/research` | Initialize a new multi-agent research session |
-| `GET` | `/api/research/{session_id}/stream` | SSE stream for real-time agent thought logs |
-| `GET` | `/api/research/{session_id}/result` | Fetch completed research report |
-| `GET` | `/api/history` | List all historical research sessions |
-| `GET` | `/api/history/{session_id}` | Fetch a specific past report |
-| `DELETE` | `/api/history/{session_id}` | Delete a research session |
-| `GET` | `/health` | API health check endpoint |
+### Web Research Endpoints
+
+| Method | Endpoint | Description | Request Payload / Params |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/research` | Submit a research query to start agent crew | `{ "topic": "str", "depth": "quick\|detailed\|deep", "focus_areas": ["str"] }` |
+| `GET` | `/api/research/{task_id}/stream` | SSE endpoint for real-time agent thought logs | N/A (EventStream) |
+| `GET` | `/api/research/{task_id}/result` | Fetch completed research report | N/A |
+| `GET` | `/api/history` | List past research sessions | `?limit=50&offset=0` |
+| `GET` | `/api/history/{task_id}` | Retrieve details of a specific past report | N/A |
+| `DELETE`| `/api/history/{task_id}` | Delete a past research session | N/A |
+
+### Document RAG & Math Endpoints
+
+| Method | Endpoint | Description | Request Payload / Params |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/documents/upload` | Upload and index a document (`.pdf`, `.docx`, `.csv`, `.xlsx`, `.txt`) | `multipart/form-data` (`file`) |
+| `POST` | `/api/documents/{doc_id}/query` | Query an uploaded document (grounded QA or math computation) | `{ "question": "str" }` |
+| `GET` | `/api/documents` | List all uploaded and indexed documents | N/A |
+| `DELETE`| `/api/documents/{doc_id}` | Delete document session and vector store collection | N/A |
+
+### Health & System Endpoints
+
+| Method | Endpoint | Description | Response |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Server health check and active session count | `{ "status": "healthy", "version": "1.0.0", "active_sessions": int }` |
+| `GET` | `/` | Serves the main Glassmorphic web dashboard | HTML Content |
 
 ---
 
@@ -160,39 +294,70 @@ http://localhost:8000
 
 ```
 AgentForge/
-├── .env                    # API keys & configuration
-├── .gitignore              # Protected secret exclusions
+├── .env                    # Environment variables & API keys
+├── .gitignore              # Git exclusions
 ├── README.md               # Project documentation
-├── requirements.txt        # Python package dependencies
+├── requirements.txt        # Python package requirements
 ├── main.py                 # FastAPI server & route handlers
-├── agents/
-│   ├── agents.py           # CrewAI agent definitions & model fallbacks
-│   ├── crew.py             # Session orchestration & SSE event engine
-│   ├── tasks.py            # Sequential task pipeline & intent prompts
-│   ├── tools.py            # Custom search & website scraping tools
-│   ├── vector_store.py     # ChromaDB vector store RAG manager
-│   └── document_agent.py   # Document analysis specialist
+├── agentforge.db           # SQLite database (auto-generated)
+├── agents/                 # Multi-Agent Core Engine
+│   ├── __init__.py
+│   ├── agents.py           # Agent definitions & multi-model fallback resiliency
+│   ├── crew.py             # Crew orchestration engine & activity logger
+│   ├── tasks.py            # Task definitions & language directives
+│   ├── tools.py            # Search, web scraping & AI image generation tools
+│   ├── vector_store.py     # ChromaDB manager with HashingVectorizer embeddings
+│   ├── document_agent.py   # Grounded document specialist agent
+│   ├── file_parser.py     # Multi-format document parser (PDF, DOCX, CSV, XLSX, TXT)
+│   └── math_tools.py      # Pandas-based mathematical execution tool
 ├── database/
-│   └── db.py               # SQLite database CRUD operations
+│   └── db.py               # SQLite database setup & CRUD helper functions
 ├── models/
-│   └── schemas.py          # Pydantic request/response schemas
-└── static/
-    ├── index.html           # Dark-mode dashboard web interface
-    ├── css/styles.css       # Premium CSS design system
-    └── js/
-        ├── app.js           # Frontend application controller
-        ├── agents-panel.js  # Live agent activity renderer
-        └── report-viewer.js # Markdown report viewer & exporter
+│   └── schemas.py          # Pydantic schemas for API request/response validation
+├── static/                 # Frontend Web Application
+│   ├── index.html           # Main Glassmorphic web interface layout
+│   ├── css/
+│   │   └── styles.css       # Custom Glassmorphic design system
+│   └── js/
+│       ├── app.js           # Frontend state manager & API client
+│       ├── agents-panel.js  # Real-time SSE agent activity renderer
+│       └── report-viewer.js # Markdown report viewer, copy & export controller
+├── chroma_db/              # Persistent ChromaDB vector database directory
+└── uploads/                # Document storage directory
 ```
+
+---
+
+## 💡 Troubleshooting & FAQs
+
+<details>
+<summary><b>1. How does AgentForge handle Groq rate limits (HTTP 429)?</b></summary>
+AgentForge wraps LLM invocations with a resilient execution wrapper. If a rate limit (HTTP 429) or quota exceeded error occurs, it parses the retry delay specified by the server, pauses execution, or automatically switches to secondary models (such as <code>llama-3.1-8b-instant</code>, <code>gemma2-9b-it</code>, or OpenRouter free models).
+</details>
+
+<details>
+<summary><b>2. How does table calculation work without LLM guessing?</b></summary>
+When a user uploads a spreadsheet (`.csv` or `.xlsx`), table schema statistics are indexed. When a numerical question is asked, the Document Agent invokes the `MathComputationTool`, which executes actual Python Pandas arithmetic against the dataset rather than generating estimated text.
+</details>
+
+<details>
+<summary><b>3. Why use Fast TF-IDF HashingVectorizer instead of SentenceTransformers?</b></summary>
+Standard SentenceTransformers rely on heavy PyTorch / ONNX C++ runtime DLLs, which frequently cause compilation failures or DLL loading errors on Windows machines. The `FastTFIDFEmbeddingFunction` provides fast, API-free cosine vector retrieval with zero C++ dependencies.
+</details>
+
+<details>
+<summary><b>4. How to fix Windows terminal Unicode logging errors?</b></summary>
+`main.py` and `crew.py` automatically reconfigure `sys.stdout` and `sys.stderr` to UTF-8 encoding on startup, preventing terminal output crashes when displaying emojis or non-ASCII characters.
+</details>
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — feel free to use it for personal, educational, or commercial projects.
+This project is licensed under the **MIT License** — feel free to use it for personal, educational, or enterprise applications.
 
 ---
 
 <p align="center">
-  <b>Built with ❤️ by Aniket Yadav</b>
+  <b>Developed with ❤️ by <a href="https://github.com/Aniketyadav29">Aniket Yadav</a></b>
 </p>
