@@ -8,6 +8,7 @@ Defines 4 specialized agents that collaborate in a research pipeline:
 """
 
 import os
+import re
 import time
 from crewai import Agent, LLM
 from agents.tools import get_search_tool, get_scrape_tool
@@ -25,14 +26,46 @@ def _create_llm_instance(model_name: str, base_url: str = None, api_key: str = N
     return LLM(**kwargs)
 
 
-# Track models that encountered 429 rate limits during the session to avoid repeatedly hitting exhausted endpoints
-_EXHAUSTED_MODELS = set()
+# Track models that hit rate limits with a timestamp-based cooldown (model_name -> expiration timestamp)
+_EXHAUSTED_MODELS: dict[str, float] = {}
+
+
+def _mark_model_exhausted(model_name: str, cooldown_seconds: float = 60.0):
+    """Mark a model as exhausted for a given cooldown duration."""
+    _EXHAUSTED_MODELS[model_name] = time.time() + cooldown_seconds
+
+
+def _is_model_exhausted(model_name: str) -> bool:
+    """Check if a model is currently in cooldown due to rate limits."""
+    expire = _EXHAUSTED_MODELS.get(model_name, 0)
+    if time.time() > expire:
+        _EXHAUSTED_MODELS.pop(model_name, None)
+        return False
+    return True
+
+
+def _parse_retry_delay(err_msg: str) -> float:
+    """Extract retry delay in seconds from error message if available."""
+    match = re.search(r'retry\s+(?:in|after)\s+([\d\.]+)\s*s?', err_msg, re.IGNORECASE)
+    if not match:
+        match = re.search(r'retry_delay\s*:\s*([\d\.]+)', err_msg, re.IGNORECASE)
+    if not match:
+        match = re.search(r'([\d\.]+)\s*seconds?', err_msg, re.IGNORECASE)
+
+    if match:
+        try:
+            val = float(match.group(1))
+            if 0 < val <= 120:
+                return val
+        except ValueError:
+            pass
+    return None
 
 
 def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
     """
-    Wrap an LLM instance with automatic rate-limit retries and multi-tier model fallback.
-    If a model hits a 429 rate limit or error, it marks it as exhausted and switches seamlessly.
+    Wrap an LLM instance with automatic rate-limit retries, exponential backoff,
+    retry-delay parsing, and multi-tier model fallback.
     """
     all_llms = [primary_llm]
     for fb in fallback_llms:
@@ -43,26 +76,57 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
 
     def resilient_call(*args, **kwargs):
         last_exception = None
-        for llm_idx, llm_instance in enumerate(all_llms):
-            model_name = llm_instance.model
-            call_func = orig_call if llm_idx == 0 else llm_instance.call
-            try:
-                return call_func(*args, **kwargs)
-            except Exception as e:
-                err_msg = str(e).lower()
-                last_exception = e
-                is_rate_limit = any(k in err_msg for k in ["429", "413", "rate limit", "rate_limit", "tpd", "tpm", "quota exceeded", "rate_limit_exceeded"])
-                
-                if is_rate_limit:
-                    _EXHAUSTED_MODELS.add(model_name)
 
+        # Try up to 2 passes across all candidate models
+        for pass_num in range(2):
+            for llm_idx, llm_instance in enumerate(all_llms):
+                model_name = llm_instance.model
+                call_func = orig_call if llm_idx == 0 else llm_instance.call
+
+                # Up to 3 retries per model with exponential backoff / parsed delay
+                max_retries_per_model = 3
+                for attempt in range(1, max_retries_per_model + 1):
+                    try:
+                        return call_func(*args, **kwargs)
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        last_exception = e
+
+                        is_rate_limit = any(k in err_msg for k in [
+                            "429", "413", "rate limit", "rate_limit",
+                            "tpd", "tpm", "rpm", "quota exceeded",
+                            "rate_limit_exceeded", "resource_exhausted"
+                        ])
+                        is_transient = any(k in err_msg for k in [
+                            "500", "502", "503", "504", "connection",
+                            "timeout", "overloaded"
+                        ])
+
+                        if not (is_rate_limit or is_transient):
+                            break
+
+                        parsed_delay = _parse_retry_delay(err_msg)
+                        if parsed_delay:
+                            wait_time = parsed_delay + 0.5
+                            print(f"\n[⚡ Rate Limit] Model '{model_name}' requested wait. Pausing {wait_time:.1f}s before retry (Attempt {attempt}/{max_retries_per_model})...")
+                            time.sleep(wait_time)
+                        elif attempt < max_retries_per_model:
+                            wait_time = 1.5 * (attempt ** 1.3)
+                            print(f"\n[⚡ Backoff Retry] Model '{model_name}' hit rate limit/error. Waiting {wait_time:.1f}s (Attempt {attempt}/{max_retries_per_model})...")
+                            time.sleep(wait_time)
+                        else:
+                            _mark_model_exhausted(model_name, cooldown_seconds=60.0)
+
+                # Fallback to next candidate model if available
                 if llm_idx < len(all_llms) - 1:
                     next_model = all_llms[llm_idx + 1].model
-                    print(f"\n[⚡ Auto Fallback] Model '{model_name}' hit quota/limit. Instantly switching to '{next_model}'...")
-                    time.sleep(0.3)
-                    continue
-                else:
-                    raise e
+                    print(f"\n[⚡ Auto Fallback] Model '{model_name}' rate limited/exhausted. Instantly switching to '{next_model}'...")
+                    time.sleep(0.5)
+
+            if pass_num == 0:
+                print("\n[⚡ Fallback Sweep] Retrying model pool after short 4.0s pause...")
+                time.sleep(4.0)
+
         if last_exception is not None:
             raise last_exception
         raise RuntimeError("LLM execution failed: No response generated.")
@@ -74,41 +138,59 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
 def _get_llm():
     """
     Create a resilient LLM instance with active model exhaustion tracking.
-    Automatically prioritizes available models when a specific model hits daily rate limits.
+    Excludes Gemini API per configuration, using Groq and OpenRouter model pools.
     """
     groq_key = os.environ.get("GROQ_API_KEY")
-    gemini_key = os.environ.get("GEMINI_API_KEY")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
 
     candidate_models = []
 
-    # 1. Groq models (High limits: 8b-instant 500k TPD, gemma2 15k TPM)
-    if groq_key:
+    # 1. Groq models (Diversified suite of free Groq models with separate rate limit tiers)
+    if groq_key and groq_key != "your_groq_api_key_here":
         req_model = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
         if req_model.startswith("groq/"):
             req_model = "openai/" + req_model[5:]
         elif not req_model.startswith("openai/"):
             req_model = "openai/" + req_model
 
-        candidate_models.append(_create_llm_instance(req_model, "https://api.groq.com/openai/v1", groq_key))
-        candidate_models.append(_create_llm_instance("openai/llama-3.1-8b-instant", "https://api.groq.com/openai/v1", groq_key))
-        candidate_models.append(_create_llm_instance("openai/gemma2-9b-it", "https://api.groq.com/openai/v1", groq_key))
+        groq_base = "https://api.groq.com/openai/v1"
+        candidate_models.append(_create_llm_instance(req_model, groq_base, groq_key))
 
-    # 2. Gemini model (1,500 Requests/day free)
-    if gemini_key and gemini_key != "your_gemini_api_key_here":
-        candidate_models.append(_create_llm_instance("gemini/gemini-2.0-flash", api_key=gemini_key))
+        fallback_models = [
+            "openai/llama-3.1-8b-instant",
+            "openai/gemma2-9b-it",
+            "openai/llama-3.2-11b-vision-preview",
+            "openai/llama-3.2-3b-preview",
+            "openai/llama-3.2-1b-preview",
+            "openai/mixtral-8x7b-32768",
+            "openai/deepseek-r1-distill-llama-70b",
+            "openai/qwen-2.5-32b",
+        ]
+        for m in fallback_models:
+            if m != req_model:
+                candidate_models.append(_create_llm_instance(m, groq_base, groq_key))
 
-    # 3. OpenRouter model
+    # 2. OpenRouter free models
     if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
-        candidate_models.append(_create_llm_instance("openrouter/meta-llama/llama-3.3-70b-instruct:free", api_key=openrouter_key))
+        or_models = [
+            "openrouter/meta-llama/llama-3.3-70b-instruct:free",
+            "openrouter/deepseek/deepseek-r1:free",
+            "openrouter/google/gemma-2-9b-it:free",
+            "openrouter/mistralai/mistral-7b-instruct:free",
+        ]
+        for om in or_models:
+            candidate_models.append(_create_llm_instance(om, api_key=openrouter_key))
 
     # Prioritize healthy non-exhausted models
-    healthy = [m for m in candidate_models if m.model not in _EXHAUSTED_MODELS]
-    exhausted = [m for m in candidate_models if m.model in _EXHAUSTED_MODELS]
+    healthy = [m for m in candidate_models if not _is_model_exhausted(m.model)]
+    exhausted = [m for m in candidate_models if _is_model_exhausted(m.model)]
 
     ordered = healthy + exhausted
     if not ordered:
-        ordered = [_create_llm_instance("gemini/gemini-2.0-flash", api_key="")]
+        if groq_key:
+            ordered = [_create_llm_instance("openai/llama-3.1-8b-instant", "https://api.groq.com/openai/v1", groq_key)]
+        else:
+            raise RuntimeError("No valid LLM API key configured! Please set GROQ_API_KEY in .env")
 
     primary = ordered[0]
     fallbacks = ordered[1:]

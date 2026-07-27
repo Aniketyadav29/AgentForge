@@ -61,9 +61,9 @@ from agents.crew import create_session, get_session as get_crew_session, list_se
 load_dotenv()
 
 # Verify API keys
-if not os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY") == "your_gemini_api_key_here":
-    print("\n[!] WARNING: GEMINI_API_KEY not set in .env file!")
-    print("   Get your key at: https://aistudio.google.com/apikey\n")
+if not os.environ.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY") == "your_groq_api_key_here":
+    print("\n[!] WARNING: GROQ_API_KEY not set in .env file!")
+    print("   Get your key at: https://console.groq.com\n")
 
 if not os.environ.get("SERPER_API_KEY") or os.environ.get("SERPER_API_KEY") == "your_serper_api_key_here":
     print("\n[!] WARNING: SERPER_API_KEY not set in .env file!")
