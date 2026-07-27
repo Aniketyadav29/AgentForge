@@ -22,6 +22,8 @@
   - **Web Research Specialist**: Conducts live web searches and extracts data using Serper & Scrape tools.
   - **Data Analyst**: Fact-checks findings, builds side-by-side comparison tables, and structures data.
   - **Report Writer**: Synthesizes analysis into a 6-part executive markdown report.
+ 
+    
 - ⚡ **Multi-Tier Model Fallback & Resiliency**: Automatic failover between **Groq (Llama 3.3 70B, Llama 3.1 8B, Gemma 2 9B)** and **Google Gemini 2.0 Flash** to prevent 429 rate limits or daily quota shutdowns.
 - 📡 **Real-Time Agent Activity Streaming**: Server-Sent Events (SSE) stream every step, tool invocation, and status update live to the web frontend.
 - 🎯 **Multi-Depth Execution Modes**:
@@ -42,10 +44,10 @@
                                                  │
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                CrewAI Multi-Agent Pipeline                               │
+│                                CrewAI Multi-Agent Pipeline                              │
 │                                                                                         │
 │  ┌──────────────────────┐    ┌──────────────────────┐    ┌───────────────────────────┐  │
-│  │  Research Strategist │───►│ Web Research Specialist│──►│        Data Analyst       │  │
+│  │  Research Strategist │───►│ Web Research Specialist│──►│        Data Analyst      │  │
 │  │  (Plans Methodology) │    │  (Search & Scrape)   │    │ (Categorizes & Fact-Checks│  │
 │  └──────────────────────┘    └──────────────────────┘    └─────────────┬─────────────┘  │
 │                                                                        │                │
