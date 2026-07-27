@@ -83,52 +83,70 @@ Rather than relying on a single monolithic LLM prompt, AgentForge coordinates a 
 
 ## 🏗️ System Architecture
 
+AgentForge is built around a decoupled dual-engine architecture: an **Autonomous Multi-Agent Web Research Crew** and a **Grounded Document RAG & Math Engine**, orchestrated via FastAPI and streamed live to the frontend.
+
+```mermaid
+flowchart TD
+    classDef user fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef agent fill:#1e293b,stroke:#3b82f6,color:#f8fafc,stroke-width:1.5px;
+    classDef rag fill:#0f172a,stroke:#10b981,color:#f8fafc,stroke-width:1.5px;
+    classDef backend fill:#312e81,stroke:#6366f1,color:#ffffff,stroke-width:2px;
+    classDef db fill:#1e1b4b,stroke:#a855f7,color:#ffffff,stroke-width:1.5px;
+    classDef ui fill:#0284c7,stroke:#0369a1,color:#ffffff,stroke-width:2px;
+
+    User(["👤 User Request<br/>(Query or Uploaded File)"]):::user
+
+    User -->|Research Topic| AgentPipeline["🤖 CrewAI Multi-Agent Pipeline"]
+    User -->|Document Upload| RAGPipeline["📄 Document RAG & Math Engine"]
+
+    subgraph ResearchCrew ["1️⃣ Multi-Agent Research Crew"]
+        direction TB
+        A1["🔍 <b>Research Strategist</b><br/>Deconstructs Query & Plans Method"]:::agent
+        A2["🌐 <b>Web Research Specialist</b><br/>Google Search & Web Scraping"]:::agent
+        A3["📊 <b>Data Analyst</b><br/>Fact-Checking & Matrices"]:::agent
+        A4["📝 <b>Report Writer</b><br/>6-Part Markdown Report"]:::agent
+        
+        A1 --> A2 --> A3 --> A4
+    end
+
+    subgraph DocumentEngine ["2️⃣ Document Intelligence System"]
+        direction TB
+        D1["📄 <b>Multi-Format Parser</b><br/>PDF, DOCX, CSV, XLSX, TXT"]:::rag
+        D2["🗄️ <b>ChromaDB Vector Store</b><br/>Fast TF-IDF Hashing Embeddings"]:::rag
+        D3["🧠 <b>Document Specialist Agent</b><br/>Vector Search + Pandas Math Engine"]:::rag
+
+        D1 --> D2 --> D3
+    end
+
+    AgentPipeline --> ResearchCrew
+    RAGPipeline --> DocumentEngine
+
+    A4 -->|Executive Report| Backend["⚡ FastAPI Server Hub"]:::backend
+    D3 -->|Grounded Answer + Math| Backend
+
+    subgraph SystemInfrastructure ["3️⃣ Resiliency & Persistence Layer"]
+        LLM["🛡️ <b>Resilient Model Pool</b><br/>Groq (Llama 3.3 70B / 3.1 8B / Gemma 2) + OpenRouter"]:::db
+        SSE["📡 <b>SSE Event Engine</b><br/>Real-Time Agent Thought & Action Streaming"]:::db
+        DB[("💾 <b>SQLite Database</b><br/>History & Activity Logs")]:::db
+    end
+
+    Backend <--> LLM
+    Backend --> SSE
+    Backend <--> DB
+
+    SSE -->|Live Event Stream| UI["🎨 Glassmorphic UI Dashboard"]:::ui
+    Backend -->|JSON Payload| UI
 ```
-                                  ┌─────────────────────────────┐
-                                  │   User Query / Document     │
-                                  └──────────────┬──────────────┘
-                                                 │
-                   ┌─────────────────────────────┴─────────────────────────────┐
-                   ▼                                                           ▼
-┌───────────────────────────────────────┐                   ┌───────────────────────────────────────┐
-│     CrewAI Research Pipeline          │                   │      Document RAG & Math Engine       │
-│                                       │                   │                                       │
-│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
-│  │ 🔍 Research Strategist          │  │                   │  │ 📄 File Parser                 │  │
-│  │ (Deconstructs & Plans Query)    │  │                   │  │ (PDF, DOCX, CSV, XLSX, TXT)       │  │
-│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
-│                   │                   │                   │                   │                   │
-│                   ▼                   │                   │                   ▼                   │
-│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
-│  │ 🌐 Web Research Specialist       │  │                   │  │ 🗄️ ChromaDB Vector Store        │  │
-│  │ (Serper Google Search & Scrape) │  │                   │  │ (Fast TF-IDF Hashing Embeddings)│  │
-│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
-│                   │                   │                   │                   │                   │
-│                   ▼                   │                   │                   ▼                   │
-│  ┌─────────────────────────────────┐  │                   │  ┌─────────────────────────────────┐  │
-│  │ 📊 Data Analyst                 │  │                   │  │ 🧠 Document Specialist Agent    │  │
-│  │ (Fact-Checks & Matrices)        │  │                   │  │ (Vector Search + Pandas Math)   │  │
-│  └────────────────┬────────────────┘  │                   │  └────────────────┬────────────────┘  │
-│                   │                   │                   │                   │                   │
-│                   ▼                   │                   └───────────────────┼───────────────────┘
-│  ┌─────────────────────────────────┐  │                                       │
-│  │ 📝 Report Writer                │  │                                       │
-│  │ (Synthesizes Markdown Report)   │  │                                       │
-│  └────────────────┬────────────────┘  │                                       │
-└───────────────────┼───────────────────┘                                       │
-                    │                                                           │
-                    └─────────────────────────────┬─────────────────────────────┘
-                                                  │
-                                                  ▼
-                               ┌─────────────────────────────────────┐
-                               │  FastAPI Backend & SSE Streaming    │
-                               └──────────────────┬──────────────────┘
-                                                  │
-                                                  ▼
-                               ┌─────────────────────────────────────┐
-                               │ Glassmorphic Dark-Mode UI Dashboard │
-                               └─────────────────────────────────────┘
-```
+
+### 🔁 Execution Pipeline & Data Flow
+
+| Component | Responsibility & Workflow | Key Technologies |
+| :--- | :--- | :--- |
+| **1. Dual Input Router** | Routes user input dynamically to either the Autonomous Multi-Agent Research Crew or the Document Intelligence RAG Engine. | FastAPI, Pydantic |
+| **2. Autonomous Multi-Agent Crew** | Sequential 4-agent pipeline (**Strategist → Specialist → Analyst → Writer**) that plans, searches the web live via Serper, fact-checks, and synthesizes reports. | CrewAI, SerperDev API, Web Scraper |
+| **3. Document RAG & Math Engine** | Parses uploaded documents (`.pdf`, `.docx`, `.csv`, `.xlsx`, `.txt`), creates isolated ChromaDB vector collections with API-free embeddings, and executes deterministic Pandas math. | ChromaDB, Scikit-Learn `HashingVectorizer`, Pandas |
+| **4. Resiliency & Model Fallback** | Monitors API calls for rate limits (429/413), automatically retries with backoff, and fails over across Groq & OpenRouter model pools. | Custom Resilient LLM Wrapper |
+| **5. Live SSE Engine & Storage** | Captures agent steps in real time and pushes SSE events to the browser dashboard while persisting full session logs in SQLite. | `sse-starlette`, SQLite3 |
 
 ---
 
