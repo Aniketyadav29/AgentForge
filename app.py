@@ -99,6 +99,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# Auto-load Streamlit Cloud secrets into environment if available
+try:
+    if hasattr(st, "secrets"):
+        for secret_key in ["GEMINI_API_KEY", "GROQ_API_KEY", "SERPER_API_KEY"]:
+            if secret_key in st.secrets and st.secrets[secret_key] and not os.environ.get(secret_key):
+                val = str(st.secrets[secret_key]).strip()
+                os.environ[secret_key] = val
+                if secret_key == "GEMINI_API_KEY":
+                    os.environ["GOOGLE_API_KEY"] = val
+except Exception:
+    pass
+
 # -----------------------------------------------------------------------------
 # Sidebar Configuration & Keys
 # -----------------------------------------------------------------------------
@@ -114,7 +126,7 @@ with st.sidebar:
         "Gemini API Key",
         value=os.environ.get("GEMINI_API_KEY", ""),
         type="password",
-        help="Get your key at https://aistudio.google.com/"
+        help="Get your free key at https://aistudio.google.com/"
     )
     if gemini_key:
         os.environ["GEMINI_API_KEY"] = gemini_key
@@ -137,6 +149,12 @@ with st.sidebar:
     )
     if serper_key:
         os.environ["SERPER_API_KEY"] = serper_key
+
+    has_active_llm = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY"))
+    if not has_active_llm:
+        st.warning("⚠️ **No API Key Active!**\n\nEnter your **Gemini API Key** above (or set Streamlit Secrets) to generate custom AI research reports!")
+    else:
+        st.success("✅ **AI Key Connected!** Ready for live agent generation.")
 
     st.markdown("---")
     st.subheader("🤖 Active Multi-Agent Pipeline")
