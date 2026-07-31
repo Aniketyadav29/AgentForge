@@ -99,15 +99,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Auto-load Streamlit Cloud secrets into environment if available
+# Ultra-robust Streamlit Cloud secrets loader (supports TOML & raw .env syntax)
 try:
     if hasattr(st, "secrets"):
-        for secret_key in ["GEMINI_API_KEY", "GROQ_API_KEY", "SERPER_API_KEY"]:
-            if secret_key in st.secrets and st.secrets[secret_key] and not os.environ.get(secret_key):
-                val = str(st.secrets[secret_key]).strip()
-                os.environ[secret_key] = val
-                if secret_key == "GEMINI_API_KEY":
-                    os.environ["GOOGLE_API_KEY"] = val
+        # Direct key lookup
+        for key_name in ["GEMINI_API_KEY", "GROQ_API_KEY", "SERPER_API_KEY", "MODEL_NAME"]:
+            try:
+                if key_name in st.secrets and st.secrets[key_name]:
+                    val = str(st.secrets[key_name]).strip(" \"'")
+                    os.environ[key_name] = val
+                    if key_name == "GEMINI_API_KEY":
+                        os.environ["GOOGLE_API_KEY"] = val
+            except Exception:
+                pass
+
+        # Key-value iteration fallback for .env style text
+        try:
+            for k, v in st.secrets.items():
+                k_str = str(k).strip()
+                v_str = str(v).strip(" \"'") if v else ""
+                if "=" in k_str and not v_str:
+                    parts = k_str.split("=", 1)
+                    env_k = parts[0].strip()
+                    env_v = parts[1].strip(" \"'")
+                    os.environ[env_k] = env_v
+                    if env_k == "GEMINI_API_KEY":
+                        os.environ["GOOGLE_API_KEY"] = env_v
+                elif k_str and v_str:
+                    os.environ[k_str] = v_str
+                    if k_str == "GEMINI_API_KEY":
+                        os.environ["GOOGLE_API_KEY"] = v_str
+        except Exception:
+            pass
 except Exception:
     pass
 
