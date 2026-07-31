@@ -1724,6 +1724,23 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     )
     cleaned_subject = re.sub(r'\s+', ' ', cleaned_subject).strip(' .:-')
     target_name = cleaned_subject.title() if cleaned_subject else topic.title()
+    # Group snippets by best-matching topic
+    snippet_map: dict = {}
+    for item in raw_search_items:
+        for t in topic_list:
+            t_words = [w for w in t.lower().split() if len(w) > 3]
+            title_lower = item.get("title", "").lower()
+            snip = item.get("snippet", "")
+            if any(w in title_lower for w in t_words) or t.lower() in title_lower:
+                if t not in snippet_map:
+                    snippet_map[t] = []
+                snippet_map[t].append((item.get("title", ""), snip, item.get("link", "#")))
+
+    # Also collect all snippets not matched to any topic (use as general pool)
+    all_snippets = [
+        (item.get("title", ""), item.get("snippet", ""), item.get("link", "#"))
+        for item in raw_search_items
+    ]
 
     topic_sections = []
     for idx, t in enumerate(topic_list, 1):
