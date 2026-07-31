@@ -16,3 +16,4 @@ python-pptx
 Pillow
 beautifulsoup4
 pytesseract
+streamlit
