@@ -132,17 +132,19 @@ def create_scraping_task(agent, topic: str):
             f"Using the research plan provided by the Research Strategist, "
             f"execute web searches on the topic: '{topic}'.\n\n"
             f"Instructions:\n"
-            f"1. Perform 2-3 targeted web searches using search queries\n"
-            f"2. Extract specific details, names, facts, and source URLs\n"
-            f"3. Synthesize findings into a clear summary focused directly on answering the user's question\n"
-            f"4. Always include source URLs"
+            f"1. Perform 4-5 targeted web searches using diverse search queries\n"
+            f"2. Extract specific details, names, facts, statistics, quotes, and source URLs\n"
+            f"3. Synthesize findings into a rich, comprehensive summary directly answering the user's question\n"
+            f"4. Always include source URLs for every key fact\n"
+            f"5. Do NOT truncate findings — include all relevant details and data points found"
             f"{intent_note}"
             f"{lang_note}"
         ),
         expected_output=(
-            "A concise research summary in markdown format (under 600 words) containing:\n"
-            "- Specific names, details, and facts directly addressing the topic\n"
-            "- Bulleted findings with source URLs"
+            "A comprehensive research summary in markdown format (at least 800 words) containing:\n"
+            "- Specific names, details, statistics, and facts directly addressing the topic\n"
+            "- Bulleted findings with source URLs for each item\n"
+            "- Context, background, and nuanced information to inform the analyst"
         ),
         agent=agent,
     )
@@ -186,24 +188,36 @@ def create_report_task(agent, topic: str):
 
     return Task(
         description=(
-            f"Write a comprehensive, well-structured response directly answering: '{topic}'.\n\n"
-            f"Instructions:\n"
-            f"1. **Direct Answer First**: Start by directly providing what the user requested (e.g. curated list of places, options, or answer).\n"
-            f"2. **Detailed Breakdown**: For each item/recommendation, include key details (e.g., location, distance/accessibility, best time to visit, top attractions, estimated budget, activities).\n"
-            f"3. **Categorization**: Group logically (e.g. by region, interest type, or budget tier).\n"
-            f"4. **Practical Tips**: Include actionable advice (best travel modes, duration, packing/itinerary tips).\n"
-            f"5. **Sources & References**: Cite sources used.\n\n"
-            f"NOTE: Match the tone and structure to the prompt. If the user asked a general question or asked for recommendations, deliver a rich, friendly, highly useful guide, NOT a corporate business report!"
+            f"Write a COMPREHENSIVE, DETAILED, and WELL-STRUCTURED response directly answering: '{topic}'.\n\n"
+            f"⚠️ STRICT OUTPUT ORDER (MANDATORY — do NOT deviate):\n"
+            f"  PART 1 — FULL DETAILED ANSWER (write ALL content here first):\n"
+            f"    1. **Direct Answer / Overview**: Start by directly providing what the user requested.\n"
+            f"    2. **Exhaustive Breakdown**: For EACH item/recommendation, include ALL key details\n"
+            f"       (location, distance/accessibility, best time to visit, top attractions, estimated budget,\n"
+            f"        activities, why it's special, insider tips, hidden gems).\n"
+            f"    3. **Categorization**: Group items logically (by region, interest type, budget tier) with\n"
+            f"       clear ## and ### headings.\n"
+            f"    4. **Deep Practical Tips**: Comprehensive actionable advice (travel modes, duration,\n"
+            f"       itinerary suggestions, local cuisine, safety tips, best season, what to pack).\n"
+            f"    5. **Rich Context**: Historical, cultural, or scientific background that enriches understanding.\n"
+            f"  PART 2 — SOURCES (ALWAYS LAST, after all content above is complete):\n"
+            f"    6. **## Sources & References** section at the very end with all URLs cited.\n\n"
+            f"🚫 NEVER mix source URLs into the middle of content sections.\n"
+            f"🚫 NEVER put references before the full detailed answer is written.\n"
+            f"✅ The reader must be able to read the complete answer without needing to look at sources.\n\n"
+            f"NOTE: Deliver a RICH, DETAILED, HIGHLY USEFUL guide — NOT a corporate business report! "
+            f"Aim for a thorough response (1500-2500 words of actual content) that leaves the user with everything they need."
             f"{intent_note}"
             f"{lang_note}"
         ),
         expected_output=(
-            "A comprehensive, highly useful response in markdown format (800-1200 words) containing:\n"
-            "- Title matching the user query\n"
-            "- Direct summary answer\n"
-            "- Categorized, detailed recommendations with complete actionable info\n"
-            "- Practical advice / travel tips\n"
-            "- Source list"
+            "A COMPREHENSIVE, HIGHLY DETAILED response in markdown format (1500-2500 words) with STRICT ordering:\n"
+            "PART 1 (content first):\n"
+            "  - Title and executive summary\n"
+            "  - Categorized, exhaustive breakdown of each item/topic with complete details\n"
+            "  - Deep practical advice, tips, and rich cultural/scientific context\n"
+            "PART 2 (always last):\n"
+            "  - ## Sources & References section with all URLs — placed at the VERY END after all content"
         ),
         agent=agent,
     )

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
+  <title id="title">Three-dimensional AI engineering illustration</title>
+  <desc id="description">An isometric data platform with data, machine learning, and web layers connected to an AI core.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1020"/><stop offset="1" stop-color="#1e1b4b"/></linearGradient>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#273b67"/><stop offset="1" stop-color="#16213e"/></linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#1d4ed8"/><stop offset="1" stop-color="#172554"/></linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0e7490"/><stop offset="1" stop-color="#164e63"/></linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="360" rx="24" fill="url(#background)"/>
+  <g opacity=".22" stroke="#94a3b8" stroke-width="1"><path d="M0 70H1200M0 140H1200M0 210H1200M0 280H1200"/><path d="M140 0V360M280 0V360M420 0V360M560 0V360M700 0V360M840 0V360M980 0V360"/></g>
+  <path d="M250 226 600 94 950 226 600 338Z" fill="url(#surface)" stroke="#4f70aa" stroke-width="2"/>
+  <g stroke="#8db4ff" stroke-width="2" opacity=".75" fill="none"><path d="M347 236 600 140 853 236"/><path d="M432 268 600 204 768 268"/></g>
+  <g>
+    <path d="M333 186 409 157 485 186 409 215Z" fill="#4f8cff"/><path d="M333 186 409 215V268L333 239Z" fill="url(#front)"/><path d="M409 215 485 186V239L409 268Z" fill="url(#side)"/>
+    <text x="409" y="242" fill="#e0f2fe" font-family="Arial, sans-serif" font-size="16" text-anchor="middle">DATA</text>
+  </g>
+  <g>
+    <path d="M715 186 791 157 867 186 791 215Z" fill="#4f8cff"/><path d="M715 186 791 215V268L715 239Z" fill="url(#front)"/><path d="M791 215 867 186V239L791 268Z" fill="url(#side)"/>
+    <text x="791" y="242" fill="#e0f2fe" font-family="Arial, sans-serif" font-size="16" text-anchor="middle">WEB</text>
+  </g>
+  <g>
+    <path d="M524 124 600 95 676 124 600 153Z" fill="#6ea8ff"/><path d="M524 124 600 153V206L524 177Z" fill="url(#front)"/><path d="M600 153 676 124V177L600 206Z" fill="url(#side)"/>
+    <text x="600" y="180" fill="#e0f2fe" font-family="Arial, sans-serif" font-size="16" text-anchor="middle">ML</text>
+  </g>
+  <g filter="url(#glow)">
+    <path d="M600 178 642 202V250L600 274 558 250V202Z" fill="url(#core)" stroke="#fef3c7" stroke-width="3"/>
+    <path d="M600 178V226M558 202 600 226 642 202M558 250 600 226 642 250" fill="none" stroke="#fff7ed" stroke-width="2" opacity=".8"/>
+    <text x="600" y="233" fill="#fff" font-family="Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">AI</text>
+  </g>
+  <g stroke="#fbbf24" stroke-width="2" fill="none" opacity=".85"><path d="M485 205C514 205 528 212 558 218"/><path d="M715 205C686 205 672 212 642 218"/><path d="M600 206V178"/></g>
+  <g fill="#fbbf24"><circle cx="485" cy="205" r="4"/><circle cx="715" cy="205" r="4"/><circle cx="600" cy="178" r="4"/></g>
+  <text x="70" y="75" fill="#f8fafc" font-family="Arial, sans-serif" font-size="28" font-weight="700">Data  •  Intelligence  •  Product</text>
+  <text x="70" y="108" fill="#b9c7e6" font-family="Arial, sans-serif" font-size="17">Building useful systems from insight to interface.</text>
+</svg>

@@ -1,11 +1,13 @@
 """
 AgentForge — Universal File Parser
-Handles PDF, CSV, Excel, DOCX, and TXT files.
+Handles PDF, CSV, Excel, DOCX, TXT/Markdown/JSON/HTML, and common image files.
 Returns structured text + DataFrames for downstream processing.
 """
 
 import io
 import os
+import json
+import re
 from pathlib import Path
 from typing import Optional
 import pandas as pd
@@ -134,11 +136,103 @@ def _parse_txt(file_bytes: bytes) -> dict:
     return {"text": text, "tables": []}
 
 
+def _parse_json(file_bytes: bytes) -> dict:
+    """Parse JSON as readable structured text."""
+    try:
+        raw = file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raw = file_bytes.decode("latin-1")
+    try:
+        data = json.loads(raw)
+        text = json.dumps(data, indent=2, ensure_ascii=False)
+    except Exception:
+        text = raw
+    return {"text": f"JSON document\n\n{text}", "tables": []}
+
+
+def _parse_html(file_bytes: bytes) -> dict:
+    """Parse HTML with BeautifulSoup when available, otherwise strip tags."""
+    try:
+        raw = file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raw = file_bytes.decode("latin-1")
+
+    bs4 = _safe_import("bs4")
+    if bs4:
+        soup = bs4.BeautifulSoup(raw, "html.parser")
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        text = soup.get_text("\n")
+    else:
+        text = re.sub(r"<[^>]+>", " ", raw)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return {"text": text.strip(), "tables": []}
+
+
+def _parse_pptx(file_bytes: bytes) -> dict:
+    """Parse PowerPoint text when python-pptx is installed."""
+    pptx = _safe_import("pptx")
+    if not pptx:
+        raise ImportError("python-pptx not installed. Run: pip install python-pptx")
+
+    from pptx import Presentation
+    deck = Presentation(io.BytesIO(file_bytes))
+    slides = []
+    for index, slide in enumerate(deck.slides, 1):
+        lines = []
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                lines.append(shape.text.strip())
+        slides.append(f"[Slide {index}]\n" + "\n".join(lines))
+    return {"text": "\n\n".join(slides), "tables": [], "slide_count": len(deck.slides)}
+
+
+def _parse_image(file_bytes: bytes) -> dict:
+    """Parse image metadata and OCR text if optional local OCR tooling is available."""
+    metadata = []
+    ocr_text = ""
+
+    image = None
+    pil = _safe_import("PIL.Image")
+    if pil:
+        try:
+            image = pil.open(io.BytesIO(file_bytes))
+            metadata.append(f"Dimensions: {image.width} x {image.height}px")
+            metadata.append(f"Color mode: {image.mode}")
+            metadata.append(f"Format: {image.format or 'unknown'}")
+        except Exception as exc:
+            metadata.append(f"Image metadata extraction failed: {exc}")
+
+    pytesseract = _safe_import("pytesseract")
+    if pytesseract and image is not None:
+        try:
+            ocr_text = pytesseract.image_to_string(image).strip()
+        except Exception as exc:
+            metadata.append(f"OCR unavailable: {exc}")
+    else:
+        metadata.append("OCR unavailable: install Pillow + pytesseract + Tesseract OCR for text extraction.")
+
+    text_parts = [
+        "Image analysis document",
+        "\n".join(metadata) if metadata else "No image metadata available.",
+    ]
+    if ocr_text:
+        text_parts.append(f"Detected image text:\n{ocr_text}")
+    else:
+        text_parts.append("Detected image text: none extracted.")
+
+    return {"text": "\n\n".join(text_parts), "tables": [], "is_image": True}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
-SUPPORTED_EXTENSIONS = {".pdf", ".csv", ".xlsx", ".xls", ".docx", ".txt"}
+SUPPORTED_EXTENSIONS = {
+    ".pdf", ".csv", ".xlsx", ".xls", ".docx", ".txt", ".md",
+    ".json", ".html", ".htm", ".pptx",
+    ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif",
+}
 
 
 def parse_file(file_bytes: bytes, filename: str) -> dict:
@@ -174,6 +268,17 @@ def parse_file(file_bytes: bytes, filename: str) -> dict:
         ".xls":  _parse_excel,
         ".docx": _parse_docx,
         ".txt":  _parse_txt,
+        ".md":   _parse_txt,
+        ".json": _parse_json,
+        ".html": _parse_html,
+        ".htm":  _parse_html,
+        ".pptx": _parse_pptx,
+        ".png":  _parse_image,
+        ".jpg":  _parse_image,
+        ".jpeg": _parse_image,
+        ".webp": _parse_image,
+        ".bmp":  _parse_image,
+        ".gif":  _parse_image,
     }
 
     result = parsers[ext](file_bytes)

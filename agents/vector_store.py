@@ -7,6 +7,8 @@ Uses sentence-transformers locally — no API key required.
 import os
 import uuid
 import textwrap
+import json
+import re
 from typing import List, Dict
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -28,8 +30,16 @@ def _get_chroma():
     return _chroma_client
 
 
-from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
-from sklearn.feature_extraction.text import HashingVectorizer
+try:
+    from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
+    from sklearn.feature_extraction.text import HashingVectorizer
+    VECTOR_DEPS_AVAILABLE = True
+except Exception:
+    EmbeddingFunction = object
+    Documents = List[str]
+    Embeddings = List[List[float]]
+    HashingVectorizer = None
+    VECTOR_DEPS_AVAILABLE = False
 
 
 class FastTFIDFEmbeddingFunction(EmbeddingFunction):
@@ -39,6 +49,8 @@ class FastTFIDFEmbeddingFunction(EmbeddingFunction):
     """
 
     def __init__(self, n_features: int = 384):
+        if HashingVectorizer is None:
+            raise RuntimeError("Vector dependencies are not installed.")
         self.vectorizer = HashingVectorizer(
             n_features=n_features,
             alternate_sign=False,
@@ -53,10 +65,65 @@ class FastTFIDFEmbeddingFunction(EmbeddingFunction):
 
 def _get_embedding_fn():
     """Get the robust API/DLL-free embedding function."""
+    if not VECTOR_DEPS_AVAILABLE:
+        raise RuntimeError("Vector dependencies are not installed.")
     global _embedding_fn
     if _embedding_fn is None:
         _embedding_fn = FastTFIDFEmbeddingFunction(n_features=384)
     return _embedding_fn
+
+
+def _fallback_path(doc_id: str) -> str:
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fallback_dir = os.path.join(base_dir, "uploads", "vector_fallback")
+    os.makedirs(fallback_dir, exist_ok=True)
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", doc_id)
+    return os.path.join(fallback_dir, f"{safe_id}.json")
+
+
+def _store_fallback(doc_id: str, text: str, metadata: dict) -> int:
+    chunks = _chunk_text(text)
+    payload = {
+        "doc_id": doc_id,
+        "metadata": metadata,
+        "chunks": [{"id": str(uuid.uuid4()), "text": chunk, "metadata": {**metadata, "chunk_index": i}} for i, chunk in enumerate(chunks)],
+    }
+    with open(_fallback_path(doc_id), "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    return len(chunks)
+
+
+def _query_fallback(doc_id: str, question: str, top_k: int) -> List[Dict]:
+    path = _fallback_path(doc_id)
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    query_terms = set(re.findall(r"[a-zA-Z0-9]+", question.lower()))
+    scored = []
+    for chunk in payload.get("chunks", []):
+        text = chunk.get("text", "")
+        terms = set(re.findall(r"[a-zA-Z0-9]+", text.lower()))
+        overlap = len(query_terms & terms)
+        density = overlap / max(1, len(query_terms))
+        if overlap or not query_terms:
+            scored.append({
+                "text": text,
+                "score": round(density, 4),
+                "metadata": chunk.get("metadata", payload.get("metadata", {})),
+            })
+
+    if not scored:
+        scored = [
+            {
+                "text": chunk.get("text", ""),
+                "score": 0,
+                "metadata": chunk.get("metadata", payload.get("metadata", {})),
+            }
+            for chunk in payload.get("chunks", [])
+        ]
+    return sorted(scored, key=lambda item: item["score"], reverse=True)[:top_k]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,8 +164,11 @@ def store_document(doc_id: str, text: str, metadata: dict) -> int:
     Returns:
         Number of chunks stored.
     """
-    client = _get_chroma()
-    ef     = _get_embedding_fn()
+    try:
+        client = _get_chroma()
+        ef     = _get_embedding_fn()
+    except Exception:
+        return _store_fallback(doc_id, text, metadata)
 
     # Each document gets its own collection for clean isolation
     collection_name = f"doc_{doc_id.replace('-', '_')}"
@@ -138,8 +208,11 @@ def query_document(doc_id: str, question: str, top_k: int = 5) -> List[Dict]:
     Returns:
         List of dicts with 'text', 'score', and 'metadata' keys.
     """
-    client = _get_chroma()
-    ef     = _get_embedding_fn()
+    try:
+        client = _get_chroma()
+        ef     = _get_embedding_fn()
+    except Exception:
+        return _query_fallback(doc_id, question, top_k)
 
     collection_name = f"doc_{doc_id.replace('-', '_')}"
 
@@ -174,8 +247,17 @@ def query_document(doc_id: str, question: str, top_k: int = 5) -> List[Dict]:
 
 def delete_document(doc_id: str) -> bool:
     """Delete a document's ChromaDB collection."""
-    client = _get_chroma()
     collection_name = f"doc_{doc_id.replace('-', '_')}"
+    fallback_path = _fallback_path(doc_id)
+    if os.path.exists(fallback_path):
+        try:
+            os.remove(fallback_path)
+        except Exception:
+            pass
+    try:
+        client = _get_chroma()
+    except Exception:
+        return True
     try:
         client.delete_collection(collection_name)
         return True
@@ -185,5 +267,11 @@ def delete_document(doc_id: str) -> bool:
 
 def list_documents() -> List[str]:
     """Return all stored document collection names."""
-    client = _get_chroma()
-    return [c.name for c in client.list_collections()]
+    try:
+        client = _get_chroma()
+        return [c.name for c in client.list_collections()]
+    except Exception:
+        fallback_dir = os.path.dirname(_fallback_path("placeholder"))
+        if not os.path.exists(fallback_dir):
+            return []
+        return [os.path.splitext(name)[0] for name in os.listdir(fallback_dir) if name.endswith(".json")]

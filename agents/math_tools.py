@@ -10,8 +10,17 @@ import traceback
 from typing import Any, Optional, List
 import pandas as pd
 import numpy as np
-from crewai.tools import BaseTool
 from pydantic import Field
+
+try:
+    from crewai.tools import BaseTool
+except Exception:
+    class BaseTool:
+        """Small fallback so non-agent math/report paths work without CrewAI."""
+
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

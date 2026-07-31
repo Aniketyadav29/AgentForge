@@ -26,10 +26,15 @@ if hasattr(sys.stdout, 'reconfigure'):
 # Disable CrewAI telemetry to avoid background thread crashes on Windows
 os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
 
-from crewai import Crew, Process
-
-from agents.agents import create_all_agents
-from agents.tasks import create_all_tasks
+try:
+    from crewai import Crew, Process
+    from agents.agents import create_all_agents
+    from agents.tasks import create_all_tasks
+    CREWAI_AVAILABLE = True
+except Exception as _crewai_exc:
+    Crew = Process = None
+    create_all_agents = create_all_tasks = None
+    CREWAI_AVAILABLE = False
 
 
 class AgentActivityLog:
@@ -86,23 +91,31 @@ class ResearchCrew:
         self.start_time = None
         self.end_time = None
 
+    def _extract_agent_name(self, obj) -> str:
+        """Extract display role name from step or task output."""
+        if not obj:
+            return "System"
+        ag = getattr(obj, "agent", obj)
+        if hasattr(ag, "role") and ag.role:
+            return str(ag.role)
+        if isinstance(ag, str):
+            return ag
+        if hasattr(obj, "role") and obj.role:
+            return str(obj.role)
+        return "System"
+
     def _step_callback(self, step_output):
         """
         CrewAI step callback — fires after each agent action.
         Captures the agent's thought process and tool usage.
         """
         try:
-            # Extract agent info from the step
-            agent_name = "System"
+            agent_name = self._extract_agent_name(step_output)
             action = "processing"
             content = ""
-
-            if hasattr(step_output, 'agent') and step_output.agent:
-                agent_name = step_output.agent
             
             if hasattr(step_output, 'output'):
                 output_text = str(step_output.output)
-                # Identify what type of action this is
                 if "search" in output_text.lower() or "serper" in output_text.lower():
                     action = "searching the web"
                 elif "scrape" in output_text.lower() or "website" in output_text.lower():
@@ -123,10 +136,7 @@ class ResearchCrew:
         Logs the transition between agents.
         """
         try:
-            agent_name = "System"
-            if hasattr(task_output, 'agent') and task_output.agent:
-                agent_name = task_output.agent
-
+            agent_name = self._extract_agent_name(task_output)
             output_preview = ""
             if hasattr(task_output, 'raw'):
                 output_preview = str(task_output.raw)[:300]
@@ -134,7 +144,7 @@ class ResearchCrew:
             self.activity_log.add(
                 agent_name,
                 "completed task",
-                f"Task completed. Output preview: {output_preview}"
+                f"{agent_name} completed task. Preview: {output_preview[:150]}"
             )
         except Exception:
             pass

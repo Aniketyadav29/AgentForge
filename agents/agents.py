@@ -16,13 +16,13 @@ from agents.tools import get_search_tool, get_scrape_tool
 
 def _create_llm_instance(model_name: str, base_url: str = None, api_key: str = None) -> LLM:
     """Helper to create a single LLM instance."""
-    kwargs = {"model": model_name, "temperature": 0.1}
+    kwargs = {"model": model_name, "temperature": 0.3}
     if base_url:
         kwargs["base_url"] = base_url
     if api_key:
         kwargs["api_key"] = api_key
     if not model_name.startswith("openrouter/"):
-        kwargs["max_tokens"] = 2000
+        kwargs["max_tokens"] = 8192  # Raised from 2000 → 8192 for thorough detailed answers
     return LLM(**kwargs)
 
 
@@ -66,6 +66,9 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
     """
     Wrap an LLM instance with automatic rate-limit retries, exponential backoff,
     retry-delay parsing, and multi-tier model fallback.
+
+    NEVER gives up: up to MAX_GLOBAL_PASSES full sweeps through all models.
+    Between each pass, waits progressively longer so rate-limit windows expire.
     """
     all_llms = [primary_llm]
     for fb in fallback_llms:
@@ -74,20 +77,35 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
 
     orig_call = primary_llm.call
 
+    # Maximum number of full sweeps through the entire model pool.
+    MAX_GLOBAL_PASSES = 4
+    # Per-model retry attempts before moving to the next model in the list.
+    MAX_RETRIES_PER_MODEL = 3
+    # Cooldown seconds to mark an exhausted model.
+    EXHAUSTION_COOLDOWN = 90.0
+
     def resilient_call(*args, **kwargs):
         last_exception = None
 
-        # Try up to 2 passes across all candidate models
-        for pass_num in range(2):
-            for llm_idx, llm_instance in enumerate(all_llms):
-                model_name = llm_instance.model
-                call_func = orig_call if llm_idx == 0 else llm_instance.call
+        for pass_num in range(MAX_GLOBAL_PASSES):
+            # On each pass, rebuild the ordered list so recovered models get priority.
+            healthy = [m for m in all_llms if not _is_model_exhausted(m.model)]
+            exhausted = [m for m in all_llms if _is_model_exhausted(m.model)]
+            ordered_this_pass = healthy + exhausted
 
-                # Up to 3 retries per model with exponential backoff / parsed delay
-                max_retries_per_model = 3
-                for attempt in range(1, max_retries_per_model + 1):
+            if not ordered_this_pass:
+                ordered_this_pass = all_llms  # last resort: try everything
+
+            for llm_idx, llm_instance in enumerate(ordered_this_pass):
+                model_name = llm_instance.model
+                call_func = orig_call if llm_instance is primary_llm else llm_instance.call
+
+                for attempt in range(1, MAX_RETRIES_PER_MODEL + 1):
                     try:
-                        return call_func(*args, **kwargs)
+                        result = call_func(*args, **kwargs)
+                        # Success — clear any stale exhaustion mark.
+                        _EXHAUSTED_MODELS.pop(model_name, None)
+                        return result
                     except Exception as e:
                         err_msg = str(e).lower()
                         last_exception = e
@@ -103,33 +121,44 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
                         ])
 
                         if not (is_rate_limit or is_transient):
+                            # Non-retriable error — skip to next model immediately.
+                            print(f"\n[⚡ Non-retriable Error] Model '{model_name}': {str(e)[:120]}")
                             break
 
                         parsed_delay = _parse_retry_delay(err_msg)
-                        if parsed_delay:
-                            wait_time = parsed_delay + 0.5
-                            print(f"\n[⚡ Rate Limit] Model '{model_name}' requested wait. Pausing {wait_time:.1f}s before retry (Attempt {attempt}/{max_retries_per_model})...")
+                        if parsed_delay and parsed_delay < 120:
+                            wait_time = parsed_delay + 1.0
+                            print(f"\n[⚡ Rate Limit] Model '{model_name}' says wait {wait_time:.1f}s (Attempt {attempt}/{MAX_RETRIES_PER_MODEL})...")
                             time.sleep(wait_time)
-                        elif attempt < max_retries_per_model:
-                            wait_time = 1.5 * (attempt ** 1.3)
-                            print(f"\n[⚡ Backoff Retry] Model '{model_name}' hit rate limit/error. Waiting {wait_time:.1f}s (Attempt {attempt}/{max_retries_per_model})...")
+                        elif attempt < MAX_RETRIES_PER_MODEL:
+                            wait_time = 2.0 * (attempt ** 1.5)
+                            print(f"\n[⚡ Backoff] Model '{model_name}' rate-limited. Waiting {wait_time:.1f}s (Attempt {attempt}/{MAX_RETRIES_PER_MODEL})...")
                             time.sleep(wait_time)
                         else:
-                            _mark_model_exhausted(model_name, cooldown_seconds=60.0)
+                            # All retries exhausted for this model — mark and try next.
+                            _mark_model_exhausted(model_name, cooldown_seconds=EXHAUSTION_COOLDOWN)
+                            print(f"\n[⚡ Exhausted] Model '{model_name}' marked exhausted for {EXHAUSTION_COOLDOWN}s.")
 
-                # Fallback to next candidate model if available
-                if llm_idx < len(all_llms) - 1:
-                    next_model = all_llms[llm_idx + 1].model
-                    print(f"\n[⚡ Auto Fallback] Model '{model_name}' rate limited/exhausted. Instantly switching to '{next_model}'...")
-                    time.sleep(0.5)
+                # Announce switch to next model.
+                if llm_idx < len(ordered_this_pass) - 1:
+                    next_model = ordered_this_pass[llm_idx + 1].model
+                    print(f"\n[⚡ Switching] Moving from '{model_name}' → '{next_model}'...")
+                    time.sleep(0.3)
 
-            if pass_num == 0:
-                print("\n[⚡ Fallback Sweep] Retrying model pool after short 4.0s pause...")
-                time.sleep(4.0)
+            # End of one full pass — all models tried.
+            if pass_num < MAX_GLOBAL_PASSES - 1:
+                # Progressive inter-pass wait: 5s, 10s, 20s so rate limits can expire.
+                inter_pass_wait = 5.0 * (2 ** pass_num)
+                print(f"\n[⚡ Global Retry #{pass_num + 1}] All models tried. Waiting {inter_pass_wait:.0f}s before retry sweep #{pass_num + 2}...")
+                time.sleep(inter_pass_wait)
+                # Reset exhaustion marks so recovered models are tried again.
+                expired = [m for m, exp in list(_EXHAUSTED_MODELS.items()) if time.time() > exp]
+                for m in expired:
+                    _EXHAUSTED_MODELS.pop(m, None)
 
         if last_exception is not None:
             raise last_exception
-        raise RuntimeError("LLM execution failed: No response generated.")
+        raise RuntimeError("LLM execution failed after all retries: No response generated.")
 
     primary_llm.call = resilient_call
     return primary_llm
@@ -138,23 +167,36 @@ def _make_resilient_llm(primary_llm: LLM, fallback_llms: list[LLM]) -> LLM:
 def _get_llm():
     """
     Create a resilient LLM instance with active model exhaustion tracking.
-    Excludes Gemini API per configuration, using Groq and OpenRouter model pools.
+    Supports Gemini API, Groq, and OpenRouter model pools.
     """
+    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     groq_key = os.environ.get("GROQ_API_KEY")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
 
     candidate_models = []
 
-    # 1. Groq models (Diversified suite of free Groq models with separate rate limit tiers)
+    # 1. Gemini models (High reliability and fast inference)
+    if gemini_key and gemini_key != "your_gemini_api_key_here":
+        os.environ["GOOGLE_API_KEY"] = gemini_key
+        os.environ["GEMINI_API_KEY"] = gemini_key
+        gemini_models = [
+            "gemini/gemini-2.5-flash",
+            "gemini/gemini-1.5-flash",
+        ]
+        for gm in gemini_models:
+            candidate_models.append(_create_llm_instance(gm, api_key=gemini_key))
+
+    # 2. Groq models (Diversified suite of free Groq models with separate rate limit tiers)
     if groq_key and groq_key != "your_groq_api_key_here":
         req_model = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
         if req_model.startswith("groq/"):
             req_model = "openai/" + req_model[5:]
-        elif not req_model.startswith("openai/"):
+        elif not req_model.startswith("openai/") and not req_model.startswith("gemini/"):
             req_model = "openai/" + req_model
 
         groq_base = "https://api.groq.com/openai/v1"
-        candidate_models.append(_create_llm_instance(req_model, groq_base, groq_key))
+        if not req_model.startswith("gemini/"):
+            candidate_models.append(_create_llm_instance(req_model, groq_base, groq_key))
 
         fallback_models = [
             "openai/llama-3.1-8b-instant",
@@ -170,7 +212,7 @@ def _get_llm():
             if m != req_model:
                 candidate_models.append(_create_llm_instance(m, groq_base, groq_key))
 
-    # 2. OpenRouter free models
+    # 3. OpenRouter free models
     if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
         or_models = [
             "openrouter/meta-llama/llama-3.3-70b-instruct:free",
@@ -187,10 +229,12 @@ def _get_llm():
 
     ordered = healthy + exhausted
     if not ordered:
-        if groq_key:
+        if gemini_key:
+            ordered = [_create_llm_instance("gemini/gemini-2.5-flash", api_key=gemini_key)]
+        elif groq_key:
             ordered = [_create_llm_instance("openai/llama-3.1-8b-instant", "https://api.groq.com/openai/v1", groq_key)]
         else:
-            raise RuntimeError("No valid LLM API key configured! Please set GROQ_API_KEY in .env")
+            raise RuntimeError("No valid LLM API key configured! Please set GEMINI_API_KEY or GROQ_API_KEY in .env")
 
     primary = ordered[0]
     fallbacks = ordered[1:]
@@ -221,7 +265,7 @@ def create_research_strategist():
         llm=llm,
         function_calling_llm=llm,
         verbose=True,
-        max_iter=1,
+        max_iter=3,
         allow_delegation=False,
     )
 
@@ -249,8 +293,8 @@ def create_web_scraper():
         function_calling_llm=llm,
         tools=[get_search_tool()],
         verbose=True,
-        max_iter=1,
-        max_rpm=30,
+        max_iter=3,
+        max_rpm=60,
         allow_delegation=False,
     )
 
@@ -279,7 +323,7 @@ def create_data_analyst():
         llm=llm,
         function_calling_llm=llm,
         verbose=True,
-        max_iter=1,
+        max_iter=3,
         allow_delegation=False,
     )
 
@@ -311,7 +355,7 @@ def create_report_writer():
         llm=llm,
         function_calling_llm=llm,
         verbose=True,
-        max_iter=1,
+        max_iter=3,
         allow_delegation=False,
     )
 

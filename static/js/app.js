@@ -1,124 +1,181 @@
 /**
- * AgentForge — Main Application Controller
- * Manages form submission, SSE connections, history, and overall app state.
+ * AgentForge main application controller.
+ * Powers research streaming, document RAG, image generation, history, and health widgets.
  */
 
 const App = (() => {
-    // Application state
     let currentTaskId = null;
+    let currentDocId = null;
+    let currentImageUrl = '';
+    let currentFlowchartSvg = '';
     let eventSource = null;
     let isResearching = false;
+    let healthTimer = null;
+    const documentsById = new Map();
+    const API_BASE = window.location.port === '8010' ? 'http://127.0.0.1:8000' : '';
 
-    /**
-     * Initialize the application.
-     */
     function init() {
-        // Bind form submission
-        const form = document.getElementById('research-form');
-        if (form) {
-            form.addEventListener('submit', handleFormSubmit);
-        }
-
-        // Bind report action buttons
-        const copyBtn = document.getElementById('btn-copy-report');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', handleCopyReport);
-        }
-
-        const downloadBtn = document.getElementById('btn-download-report');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', handleDownloadReport);
-        }
-
-        // Load research history
+        bindResearchControls();
         loadHistory();
-
-        // Show welcome state
+        loadDocuments();
+        refreshHealth();
+        healthTimer = window.setInterval(refreshHealth, 30000);
         showWelcomeState();
-
-        console.log('⚡ AgentForge initialized');
+        window.addEventListener('beforeunload', cleanup);
     }
 
-    /**
-     * Handle research form submission.
-     */
-    async function handleFormSubmit(e) {
-        e.preventDefault();
+    function bindResearchControls() {
+        const form = document.getElementById('research-form');
+        if (form) form.addEventListener('submit', handleFormSubmit);
 
-        if (isResearching) return;
+        const copyBtn = document.getElementById('btn-copy-report');
+        if (copyBtn) copyBtn.addEventListener('click', handleCopyReport);
 
+        const downloadBtn = document.getElementById('btn-download-report');
+        if (downloadBtn) downloadBtn.addEventListener('click', handleDownloadReport);
+    }
+
+    function cleanup() {
+        if (eventSource) eventSource.close();
+        if (healthTimer) window.clearInterval(healthTimer);
+    }
+
+    function switchMode(mode) {
+        ['research', 'document', 'image'].forEach((name) => {
+            const tab = document.getElementById(`mode-${name}`);
+            const view = document.getElementById(`${name}-mode`);
+            if (tab) tab.classList.toggle('active', name === mode);
+            if (view) view.hidden = name !== mode;
+        });
+
+        if (mode === 'document') loadDocuments();
+        if (mode === 'research') loadHistory();
+    }
+
+    function fillPrompt(text) {
+        const input = document.getElementById('topic-input');
+        if (!input) return;
+        input.value = text;
+        input.focus();
+        showToast('Prompt filled. Launch when ready.', 'info');
+    }
+
+    function fillImagePrompt(text) {
+        const input = document.getElementById('image-prompt');
+        if (!input) return;
+        input.value = text;
+        input.focus();
+    }
+
+    function syncResearchPrompt(text) {
+        const input = document.getElementById('topic-input');
+        if (input) input.value = text;
+    }
+
+    function setDepth(depth) {
+        const input = document.querySelector(`input[name="depth"][value="${depth}"]`);
+        if (input) input.checked = true;
+
+        document.querySelectorAll('.depth-orbits button, .depth-label').forEach((button) => {
+            button.classList.toggle('selected', button.textContent.toLowerCase().includes(depth.replace('-', ' ')));
+        });
+    }
+
+    async function launchFromVisualCommand() {
+        const visualInput = document.getElementById('visual-command-input');
         const topicInput = document.getElementById('topic-input');
-        const topic = topicInput ? topicInput.value.trim() : '';
+        const topic = (visualInput?.value || topicInput?.value || '').trim();
+        const depth = document.querySelector('input[name="depth"]:checked')?.value || 'detailed';
 
+        if (topicInput && topic) topicInput.value = topic;
         if (!topic) {
-            showToast('Please enter a research topic.', 'error');
+            showToast('Enter a research command first.', 'error');
+            visualInput?.focus();
             return;
         }
 
-        // Get selected depth
-        const depthRadio = document.querySelector('input[name="depth"]:checked');
-        const depth = depthRadio ? depthRadio.value : 'detailed';
-
-        // Start research
         await startResearch(topic, depth);
     }
 
-    /**
-     * Submit research request to the API.
-     */
+    async function attachFileToTextarea(event, textareaId, badgeId) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const textarea = document.getElementById(textareaId);
+        const badge = document.getElementById(badgeId);
+        const maxBytes = 350000;
+
+        if (file.size > maxBytes) {
+            showToast('Attached context file is too large. Use a smaller text file.', 'error');
+            event.target.value = '';
+            return;
+        }
+
+        try {
+            const text = await file.text();
+            textarea.value = `${textarea.value.trim()}\n\nAttached file context (${file.name}):\n${text}`.trim();
+            if (badge) {
+                badge.hidden = false;
+                badge.textContent = `Attached ${file.name}`;
+            }
+            showToast('File context added to the research prompt.', 'success');
+        } catch (error) {
+            showToast(`Could not attach file: ${error.message}`, 'error');
+        }
+    }
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        if (isResearching) return;
+
+        const topic = document.getElementById('topic-input')?.value.trim() || '';
+        const depth = document.querySelector('input[name="depth"]:checked')?.value || 'detailed';
+
+        if (!topic) {
+            showToast('Enter a research topic first.', 'error');
+            return;
+        }
+
+        await startResearch(topic, depth);
+    }
+
     async function startResearch(topic, depth) {
         setLoadingState(true);
         hideWelcomeState();
 
         try {
-            const response = await fetch('/api/research', {
+            const response = await fetch(apiUrl('/api/research'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ topic, depth }),
             });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to start research');
-            }
-
-            const data = await response.json();
+            const data = await readJsonResponse(response);
             currentTaskId = data.task_id;
 
-            // Show agent panel and start SSE stream
             AgentsPanel.show();
             ReportViewer.hideReport();
-            setSystemStatus('running', `Researching: ${truncate(topic, 40)}`);
-            showToast('Research crew launched! Watch the agents work below.', 'success');
-
-            // Connect to SSE stream
+            setSystemStatus('running', `Researching: ${truncate(topic, 44)}`);
+            showToast('Research crew launched.', 'success');
             connectSSE(currentTaskId);
-
+            loadHistory();
         } catch (error) {
-            console.error('Research start error:', error);
             showToast(`Failed to start research: ${error.message}`, 'error');
+            setSystemStatus('error', 'Research failed to start');
             setLoadingState(false);
             showWelcomeState();
         }
     }
 
-    /**
-     * Connect to the SSE stream for real-time agent activity.
-     */
     function connectSSE(taskId) {
-        // Close any existing connection
-        if (eventSource) {
-            eventSource.close();
-        }
-
-        eventSource = new EventSource(`/api/research/${taskId}/stream`);
+        if (eventSource) eventSource.close();
+        eventSource = new EventSource(apiUrl(`/api/research/${taskId}/stream`));
 
         eventSource.addEventListener('agent_activity', (event) => {
             try {
-                const activity = JSON.parse(event.data);
-                AgentsPanel.processActivity(activity);
-            } catch (e) {
-                console.error('SSE parse error:', e);
+                AgentsPanel.processActivity(JSON.parse(event.data));
+            } catch (error) {
+                console.error('SSE parse error:', error);
             }
         });
 
@@ -129,306 +186,724 @@ const App = (() => {
                 eventSource = null;
 
                 if (data.status === 'completed') {
-                    // Fetch the full result
                     await fetchAndShowResult(taskId);
                     AgentsPanel.markAllCompleted();
-                    setSystemStatus('idle', 'Research completed ✓');
-                    showToast('Research completed! Scroll down to see the report.', 'success');
+                    setSystemStatus('idle', 'Research completed');
+                    showToast('Report is ready.', 'success');
                 } else {
                     setSystemStatus('error', 'Research failed');
-                    showToast(`Research failed: ${data.error || 'Unknown error'}`, 'error');
+                    showToast(data.error || 'Research failed.', 'error');
                 }
-            } catch (e) {
-                console.error('SSE complete event error:', e);
+            } catch (error) {
+                console.error('SSE completion error:', error);
+            } finally {
+                setLoadingState(false);
+                loadHistory();
+                refreshHealth();
             }
-
-            setLoadingState(false);
-            loadHistory(); // Refresh history
         });
 
-        eventSource.onerror = (error) => {
-            console.error('SSE error:', error);
-            // Don't immediately show error — SSE auto-reconnects
-            // Only handle if the connection is truly closed
+        eventSource.onerror = () => {
             if (eventSource && eventSource.readyState === EventSource.CLOSED) {
                 eventSource = null;
                 setLoadingState(false);
-                // Try to fetch result anyway (it may have completed)
                 fetchAndShowResult(taskId);
+                loadHistory();
             }
         };
     }
 
-    /**
-     * Fetch the final result and show the report.
-     */
     async function fetchAndShowResult(taskId) {
         try {
-            const response = await fetch(`/api/research/${taskId}/result`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch result');
-            }
-
-            const data = await response.json();
+            const response = await fetch(apiUrl(`/api/research/${taskId}/result`));
+            const data = await readJsonResponse(response);
             ReportViewer.showReport(data);
         } catch (error) {
-            console.error('Fetch result error:', error);
+            showToast(`Could not fetch report: ${error.message}`, 'error');
         }
     }
 
-    /**
-     * Load research history from the API.
-     */
     async function loadHistory() {
         try {
-            const response = await fetch('/api/history');
-            if (!response.ok) return;
-
-            const data = await response.json();
+            const response = await fetch(apiUrl('/api/history'));
+            const data = await readJsonResponse(response);
             renderHistory(data.sessions || []);
         } catch (error) {
-            console.error('History load error:', error);
+            renderHistory([]);
         }
     }
 
-    /**
-     * Render the history sidebar.
-     */
     function renderHistory(sessions) {
         const container = document.getElementById('history-list');
         if (!container) return;
 
-        if (sessions.length === 0) {
+        if (!sessions.length) {
             container.innerHTML = `
                 <div class="history-empty">
-                    <div class="empty-icon">📭</div>
-                    <p>No research sessions yet.<br>Start your first research above!</p>
+                    <strong>No research sessions yet.</strong>
+                    <span>Launch your first report to build the archive.</span>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = sessions.map(session => {
-            const date = new Date(session.created_at);
-            const dateStr = date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-            });
-            const timeStr = date.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-
-            const statusClass = session.status || 'completed';
-            const isActive = session.task_id === currentTaskId;
-            const duration = session.duration_seconds
-                ? `${session.duration_seconds}s`
-                : '—';
-
+        container.innerHTML = sessions.map((session) => {
+            const created = formatDateTime(session.created_at);
+            const duration = session.duration_seconds ? `${Math.round(session.duration_seconds)}s` : 'pending';
+            const status = session.status || 'completed';
             return `
-                <div class="history-item ${isActive ? 'active' : ''}"
-                     onclick="App.loadHistoryItem('${session.task_id}')"
-                     title="${escapeAttr(session.topic)}">
-                    <div class="history-topic">${escapeHtml(session.topic)}</div>
-                    <div class="history-meta">
-                        <div class="history-status">
-                            <span class="history-status-dot ${statusClass}"></span>
-                            <span>${statusClass}</span>
-                        </div>
-                        <span>${dateStr} ${timeStr} · ${duration}</span>
-                    </div>
-                </div>
+                <button class="history-item ${session.task_id === currentTaskId ? 'active' : ''}" type="button" onclick="App.loadHistoryItem('${escapeAttr(session.task_id)}')" title="${escapeAttr(session.topic)}">
+                    <span class="history-topic">${escapeHtml(session.topic)}</span>
+                    <span class="history-meta">
+                        <span class="history-status"><span class="history-status-dot ${escapeAttr(status)}"></span>${escapeHtml(status)}</span>
+                        <span>${created} · ${duration}</span>
+                    </span>
+                </button>
             `;
         }).join('');
     }
 
-    /**
-     * Load a specific history item and display its report.
-     */
     async function loadHistoryItem(taskId) {
         try {
-            const response = await fetch(`/api/history/${taskId}`);
-            if (!response.ok) throw new Error('Not found');
-
-            const data = await response.json();
-
-            // Safe parsing helper function
-            const parseJsonIfNeeded = (val) => {
-                if (!val) return [];
-                if (typeof val === 'string') {
-                    try { return JSON.parse(val); } catch (e) { return []; }
-                }
-                return Array.isArray(val) ? val : [];
-            };
-
-            const agentsUsed = parseJsonIfNeeded(data.agents_used);
+            const response = await fetch(apiUrl(`/api/history/${taskId}`));
+            const data = await readJsonResponse(response);
             const activityLog = parseJsonIfNeeded(data.activity_log);
-            const reportContent = data.report || data.error_message || 'No report available for this session.';
+            const agentsUsed = parseJsonIfNeeded(data.agents_used);
 
             currentTaskId = taskId;
+            switchMode('research');
             hideWelcomeState();
-
             ReportViewer.showReport({
-                report: reportContent,
+                report: data.report || data.error_message || 'No report available for this session.',
                 task_id: taskId,
                 duration_seconds: data.duration_seconds,
                 agents_used: agentsUsed,
                 activity_count: activityLog.length,
                 depth: data.depth,
             });
-
-            // Update active state in sidebar
-            document.querySelectorAll('.history-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            const clickedItems = document.querySelectorAll('.history-item');
-            clickedItems.forEach(item => {
-                if (item.getAttribute('onclick')?.includes(taskId)) {
-                    item.classList.add('active');
-                }
-            });
-
+            loadHistory();
         } catch (error) {
-            console.error('Load history item error:', error);
-            showToast('Failed to load research session.', 'error');
+            showToast(`Could not load history item: ${error.message}`, 'error');
         }
     }
 
-    /**
-     * Handle copy report button click.
-     */
-    async function handleCopyReport() {
-        const success = await ReportViewer.copyReport();
-        if (success) {
-            showToast('Report copied to clipboard!', 'success');
-            // Visual feedback on button
-            const btn = document.getElementById('btn-copy-report');
-            if (btn) {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✓ Copied!';
-                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+    async function refreshHealth() {
+        try {
+            const response = await fetch(apiUrl('/health'));
+            const data = await readJsonResponse(response);
+            setText('health-status', data.status || 'healthy');
+            setText('health-version', data.version || '-');
+            setText('health-sessions', String(data.active_sessions ?? '-'));
+        } catch (error) {
+            setText('health-status', 'offline');
+            setText('health-version', '-');
+            setText('health-sessions', '-');
+        }
+    }
+
+    function triggerFileInput(event) {
+        if (event.target?.id === 'file-input') return;
+        document.getElementById('file-input')?.click();
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+        document.getElementById('upload-zone')?.classList.add('drag-over');
+    }
+
+    function handleDragLeave(event) {
+        event.preventDefault();
+        document.getElementById('upload-zone')?.classList.remove('drag-over');
+    }
+
+    function handleFileDrop(event) {
+        event.preventDefault();
+        document.getElementById('upload-zone')?.classList.remove('drag-over');
+        const file = event.dataTransfer?.files?.[0];
+        if (file) uploadDocument(file);
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files?.[0];
+        if (file) uploadDocument(file);
+        event.target.value = '';
+    }
+
+    async function uploadDocument(file) {
+        const allowed = ['pdf', 'docx', 'csv', 'xlsx', 'xls', 'txt', 'md', 'json', 'html', 'htm', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!allowed.includes(ext)) {
+            showToast(`Unsupported file type .${ext}.`, 'error');
+            return;
+        }
+
+        setText('selected-file-label', file.name);
+        setUploadProgress(true, 18, 'Uploading file...');
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            setUploadProgress(true, 42, 'Parsing and indexing document...');
+
+            const response = await fetch(apiUrl('/api/documents/upload'), {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await readJsonResponse(response);
+
+            currentDocId = data.doc_id;
+            renderCurrentDoc(data);
+            resetDocChat();
+            document.getElementById('doc-qa-section').hidden = false;
+            setUploadProgress(false);
+            showToast(`${data.filename} is indexed. Building report...`, 'success');
+            loadDocuments();
+            await generateDocumentReport(data.doc_id);
+        } catch (error) {
+            setUploadProgress(false);
+            showToast(`Document upload failed: ${error.message}`, 'error');
+        }
+    }
+
+    async function loadDocuments() {
+        const container = document.getElementById('docs-list');
+        if (!container) return;
+
+        try {
+            const response = await fetch(apiUrl('/api/documents'));
+            const data = await readJsonResponse(response);
+            const docs = data.documents || [];
+            documentsById.clear();
+            docs.forEach((doc) => documentsById.set(doc.doc_id, doc));
+
+            if (!docs.length) {
+                container.innerHTML = `
+                    <div class="history-empty">
+                        <strong>No documents loaded.</strong>
+                        <span>Upload one in the Documents tab.</span>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = docs.map((doc) => `
+                <button class="doc-item ${doc.doc_id === currentDocId ? 'active' : ''}" type="button" onclick="App.selectDocumentById('${escapeAttr(doc.doc_id)}')">
+                    <span class="doc-name">${escapeHtml(doc.filename)}</span>
+                    <span class="doc-meta">
+                        <span>${escapeHtml(String(doc.file_type || '').toUpperCase())} · ${formatBytes(doc.file_size || 0)}</span>
+                        <span>${Number(doc.chunk_count || 0)} chunks</span>
+                    </span>
+                </button>
+            `).join('');
+        } catch (error) {
+            container.innerHTML = `
+                <div class="history-empty">
+                    <strong>Documents unavailable.</strong>
+                    <span>${escapeHtml(error.message)}</span>
+                </div>
+            `;
+        }
+    }
+
+    function selectDocumentById(docId) {
+        const doc = documentsById.get(docId);
+        if (!doc) {
+            showToast('Could not find that document. Refreshing the list.', 'error');
+            loadDocuments();
+            return;
+        }
+
+        selectDocument(
+            doc.doc_id,
+            doc.filename,
+            doc.file_type,
+            Number(doc.file_size || 0),
+            Number(doc.chunk_count || 0),
+            Boolean(doc.has_tables)
+        );
+    }
+
+    function selectDocument(docId, filename, fileType, fileSize, chunkCount, hasTables) {
+        currentDocId = docId;
+        switchMode('document');
+        renderCurrentDoc({
+            doc_id: docId,
+            filename,
+            file_type: fileType,
+            file_size: fileSize,
+            chunk_count: chunkCount,
+            has_tables: Boolean(hasTables),
+        });
+        resetDocChat();
+        document.getElementById('doc-qa-section').hidden = false;
+        loadDocuments();
+        showToast(`${filename} selected.`, 'info');
+    }
+
+    function renderCurrentDoc(doc) {
+        const info = document.getElementById('doc-info-bar');
+        if (!info) return;
+
+        info.hidden = false;
+        setText('doc-info-icon', String(doc.file_type || 'doc').toUpperCase().slice(0, 4));
+        setText('doc-info-name', doc.filename || 'Uploaded document');
+        setText(
+            'doc-info-meta',
+            `${String(doc.file_type || '').toUpperCase()} · ${formatBytes(doc.file_size || 0)} · ${doc.chunk_count || 0} chunks${doc.has_tables ? ' · tables detected' : ''}`
+        );
+    }
+
+    function resetDocChat() {
+        const history = document.getElementById('doc-chat-history');
+        if (!history) return;
+        history.innerHTML = `
+            <div class="doc-chat-welcome">
+                <strong>Document ready.</strong>
+                <span>Ask a question or request a calculation grounded in the uploaded file.</span>
+            </div>
+        `;
+    }
+
+    async function deleteCurrentDoc() {
+        if (!currentDocId) {
+            showToast('No document selected.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(apiUrl(`/api/documents/${currentDocId}`), { method: 'DELETE' });
+            await readJsonResponse(response);
+            currentDocId = null;
+            setText('selected-file-label', 'No file chosen');
+            document.getElementById('doc-info-bar').hidden = true;
+            document.getElementById('doc-qa-section').hidden = true;
+            resetDocChat();
+            showToast('Document removed.', 'success');
+            loadDocuments();
+        } catch (error) {
+            showToast(`Could not remove document: ${error.message}`, 'error');
+        }
+    }
+
+    async function generateCurrentDocReport() {
+        if (!currentDocId) {
+            showToast('Upload or select a document first.', 'error');
+            return;
+        }
+        await generateDocumentReport(currentDocId);
+    }
+
+    async function generateDocumentReport(docId) {
+        try {
+            setSystemStatus('running', 'Generating document report');
+            const response = await fetch(apiUrl(`/api/documents/${docId}/report`));
+            const data = await readJsonResponse(response);
+            switchMode('document');
+            ReportViewer.showReport({
+                report: data.report,
+                task_id: data.doc_id,
+                depth: 'document',
+                activity_count: data.sources?.length || 0,
+                agents_used: ['Document Analyzer'],
+            });
+            appendChatBubble('assistant', data.report, data.sources || []);
+            setSystemStatus('idle', 'Document report ready');
+            showToast('Complete document report generated.', 'success');
+        } catch (error) {
+            setSystemStatus('error', 'Document report failed');
+            showToast(`Could not generate report: ${error.message}`, 'error');
+        }
+    }
+
+    function askQuickDocQuestion(questionText) {
+        const input = document.getElementById('doc-question-input');
+        const form = document.getElementById('doc-question-form');
+        if (!input || !form) return;
+        input.value = questionText;
+        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }
+
+    async function submitDocQuestion(event) {
+        event.preventDefault();
+        if (!currentDocId) {
+            showToast('Upload or select a document first.', 'error');
+            return;
+        }
+
+        const input = document.getElementById('doc-question-input');
+        const question = input?.value.trim() || '';
+        if (!question) return;
+
+        appendChatBubble('user', question);
+        input.value = '';
+        setDocLoading(true);
+
+        try {
+            const response = await fetch(apiUrl(`/api/documents/${currentDocId}/query`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question }),
+            });
+            const data = await readJsonResponse(response);
+            appendChatBubble('assistant', data.answer || 'No answer returned.', data.sources || [], data.computation_steps);
+        } catch (error) {
+            appendChatBubble('assistant', `Error: ${error.message}`);
+            showToast('Document question failed.', 'error');
+        } finally {
+            setDocLoading(false);
+        }
+    }
+
+    function appendChatBubble(role, content, sources = [], computationSteps = null) {
+        const history = document.getElementById('doc-chat-history');
+        if (!history) return;
+
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble chat-bubble-${role === 'user' ? 'user' : 'assistant'}`;
+
+        const rendered = role === 'assistant' ? renderMarkdown(content) : escapeHtml(content);
+        const sourceHtml = sources.length ? `
+            <div class="source-chips">
+                ${sources.slice(0, 5).map((source, index) => `<span class="source-chip" title="${escapeAttr(source.chunk || '')}">Source ${index + 1} · ${Math.round((source.score || 0) * 100)}%</span>`).join('')}
+            </div>
+        ` : '';
+        const mathHtml = computationSteps ? `
+            <div class="computation-steps">
+                <strong>Computation steps</strong>
+                <pre>${escapeHtml(computationSteps)}</pre>
+            </div>
+        ` : '';
+
+        bubble.innerHTML = `
+            <span class="bubble-role">${role === 'user' ? 'You' : 'AgentForge'}</span>
+            <div class="bubble-content">${rendered}${sourceHtml}${mathHtml}</div>
+        `;
+        history.appendChild(bubble);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    async function handleImageGenSubmit(event) {
+        event.preventDefault();
+        const prompt = document.getElementById('image-prompt')?.value.trim() || '';
+        if (!prompt) {
+            showToast('Describe the image you want first.', 'error');
+            return;
+        }
+
+        // Read visual type selector
+        const visualType = document.querySelector('input[name="visual-type"]:checked')?.value || 'auto';
+
+        const box = document.getElementById('image-result-box');
+        const loader = document.getElementById('image-loading-spinner');
+        const preview = document.getElementById('generated-image-preview');
+        const flowchart = document.getElementById('generated-flowchart-preview');
+        const actions = document.getElementById('image-actions');
+        const flowchartDownload = document.getElementById('btn-download-flowchart');
+        const imageLink = document.getElementById('image-download-link');
+        const generateBtn = document.getElementById('btn-generate-visual');
+
+        if (box) box.hidden = false;
+        if (loader) loader.hidden = false;
+        if (preview) preview.hidden = true;
+        if (flowchart) {
+            flowchart.hidden = true;
+            flowchart.innerHTML = '';
+        }
+        if (actions) actions.hidden = true;
+        if (flowchartDownload) flowchartDownload.hidden = true;
+        if (imageLink) imageLink.hidden = false;
+        if (generateBtn) {
+            generateBtn.disabled = true;
+            generateBtn.classList.add('loading');
+        }
+        currentFlowchartSvg = '';
+
+        try {
+            const response = await fetch(apiUrl('/api/tools/image'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, type: visualType }),
+            });
+            const data = await readJsonResponse(response);
+
+            if (data.type === 'flowchart' && data.flowchart_svg) {
+                currentFlowchartSvg = data.flowchart_svg;
+                if (loader) loader.hidden = true;
+                if (flowchart) {
+                    flowchart.innerHTML = '';
+
+                    // ── Definition card ──────────────────────────────
+                    if (data.definition) {
+                        const defCard = document.createElement('div');
+                        defCard.className = 'flowchart-def-card';
+                        defCard.innerHTML = `
+                            <span class="def-icon">📖</span>
+                            <div class="def-body">
+                                <strong class="def-label">Definition</strong>
+                                <p class="def-text">${data.definition.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+                            </div>`;
+                        flowchart.appendChild(defCard);
+                    }
+
+                    // ── SVG wrapper ──────────────────────────────────
+                    const svgWrap = document.createElement('div');
+                    svgWrap.className = 'flowchart-svg-wrap';
+                    svgWrap.innerHTML = data.flowchart_svg;
+                    flowchart.appendChild(svgWrap);
+
+                    flowchart.hidden = false;
+                }
+                if (actions) actions.hidden = false;
+                if (flowchartDownload) flowchartDownload.hidden = false;
+                if (imageLink) imageLink.hidden = true;
+                currentImageUrl = '';
+                showToast('Flowchart generated.', 'success');
+                return;
+            }
+
+            currentImageUrl = data.image_url;
+
+            preview.src = currentImageUrl;
+            preview.onload = () => {
+                if (loader) loader.hidden = true;
+                preview.hidden = false;
+                if (actions) actions.hidden = false;
+            };
+            preview.onerror = () => {
+                if (loader) loader.hidden = true;
+                showToast('The image service returned a URL, but preview loading failed.', 'error');
+            };
+
+            const link = document.getElementById('image-download-link');
+            if (link) link.href = currentImageUrl;
+            showToast('Image request sent.', 'success');
+        } catch (error) {
+            if (loader) loader.hidden = true;
+            showToast(`Image generation failed: ${error.message}`, 'error');
+        } finally {
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('loading');
             }
         }
     }
 
-    /**
-     * Handle download report button click.
-     */
-    function handleDownloadReport() {
-        ReportViewer.downloadReport();
-        showToast('Report downloaded!', 'success');
-    }
-
-    /**
-     * Set loading state for the submit button.
-     */
-    function setLoadingState(loading) {
-        isResearching = loading;
-        const btn = document.getElementById('submit-btn');
-        if (btn) {
-            btn.disabled = loading;
-            btn.classList.toggle('loading', loading);
+    async function copyImageUrl() {
+        if (!currentImageUrl && !currentFlowchartSvg) return;
+        try {
+            await navigator.clipboard.writeText(currentImageUrl || currentFlowchartSvg);
+            showToast(currentImageUrl ? 'Image URL copied.' : 'Flowchart SVG copied.', 'success');
+        } catch (error) {
+            showToast('Could not copy visual output.', 'error');
         }
     }
 
-    /**
-     * Update the system status indicator in the header.
-     */
+    function downloadFlowchart() {
+        if (!currentFlowchartSvg) return;
+        const blob = new Blob([currentFlowchartSvg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'agentforge-flowchart.svg';
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function handleCopyReport() {
+        const success = await ReportViewer.copyReport();
+        showToast(success ? 'Report copied.' : 'No report to copy.', success ? 'success' : 'error');
+    }
+
+    function handleDownloadReport() {
+        ReportViewer.downloadReport();
+        showToast('Report downloaded.', 'success');
+    }
+
+    function setLoadingState(loading) {
+        isResearching = loading;
+        const button = document.getElementById('submit-btn');
+        if (!button) return;
+        button.disabled = loading;
+        button.classList.toggle('loading', loading);
+    }
+
+    function setDocLoading(loading) {
+        const button = document.getElementById('btn-doc-ask');
+        const spinner = document.getElementById('doc-spinner');
+        const text = document.getElementById('doc-ask-text');
+        if (button) button.disabled = loading;
+        if (spinner) spinner.classList.toggle('visible', loading);
+        if (text) text.textContent = loading ? 'Thinking' : 'Ask';
+    }
+
+    function setUploadProgress(visible, percent = 0, label = '') {
+        const container = document.getElementById('upload-progress');
+        const fill = document.getElementById('progress-fill');
+        const labelEl = document.getElementById('progress-label');
+        if (container) container.hidden = !visible;
+        if (fill) fill.style.width = visible ? `${percent}%` : '0%';
+        if (labelEl && label) labelEl.textContent = label;
+
+        if (visible && fill) {
+            window.setTimeout(() => {
+                if (!container.hidden) fill.style.width = '82%';
+            }, 350);
+        }
+    }
+
     function setSystemStatus(state, message) {
         const dot = document.getElementById('status-dot');
         const text = document.getElementById('status-text');
-
         if (dot) {
             dot.className = 'status-dot';
-            if (state === 'running') dot.classList.add('running');
-            else if (state === 'error') dot.classList.add('error');
-            else dot.classList.add('idle');
+            dot.classList.add(state === 'running' ? 'running' : state === 'error' ? 'error' : 'idle');
         }
-
-        if (text) {
-            text.textContent = message || 'System Ready';
-        }
+        if (text) text.textContent = message || 'System ready';
     }
 
-    /**
-     * Show the welcome/empty state.
-     */
     function showWelcomeState() {
         const welcome = document.getElementById('welcome-state');
-        if (welcome) welcome.style.display = 'flex';
+        if (welcome) welcome.hidden = false;
     }
 
-    /**
-     * Hide the welcome/empty state.
-     */
     function hideWelcomeState() {
         const welcome = document.getElementById('welcome-state');
-        if (welcome) welcome.style.display = 'none';
+        if (welcome) welcome.hidden = true;
     }
 
-    /**
-     * Show a toast notification.
-     */
     function showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');
         if (!container) return;
 
-        const icons = {
-            success: '✅',
-            error: '❌',
-            info: 'ℹ️',
-        };
-
+        const icons = { success: 'OK', error: '!', info: 'i' };
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.innerHTML = `
             <span class="toast-icon">${icons[type] || icons.info}</span>
             <span class="toast-message">${escapeHtml(message)}</span>
-            <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+            <button class="toast-close" type="button" aria-label="Dismiss" onclick="this.parentElement.remove()">x</button>
         `;
-
         container.appendChild(toast);
-
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentElement) {
-                toast.style.animation = 'slideOutRight 0.3s ease-out forwards';
-                setTimeout(() => toast.remove(), 300);
-            }
-        }, 5000);
+        window.setTimeout(() => toast.remove(), 5200);
     }
 
-    /**
-     * Truncate a string to a maximum length.
-     */
-    function truncate(str, maxLen) {
-        if (str.length <= maxLen) return str;
-        return str.substring(0, maxLen - 3) + '...';
+    async function readJsonResponse(response) {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || `Request failed with ${response.status}`);
+        }
+        return data;
     }
 
-    /**
-     * Escape HTML entities for safe rendering.
-     */
+    function apiUrl(path) {
+        return `${API_BASE}${path}`;
+    }
+
+    function renderMarkdown(markdown) {
+        if (typeof marked === 'undefined') return escapeHtml(markdown);
+        try {
+            return marked.parse(markdown || '');
+        } catch (error) {
+            return escapeHtml(markdown || '');
+        }
+    }
+
+    function parseJsonIfNeeded(value) {
+        if (!value) return [];
+        if (Array.isArray(value)) return value;
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    function truncate(value, maxLen) {
+        return value.length > maxLen ? `${value.slice(0, maxLen - 3)}...` : value;
+    }
+
+    function formatDateTime(value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatBytes(bytes) {
+        const size = Number(bytes || 0);
+        if (size < 1024) return `${size} B`;
+        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
     function escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = String(text ?? '');
         return div.innerHTML;
     }
 
-    /**
-     * Escape for HTML attributes.
-     */
     function escapeAttr(text) {
-        return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
-    // Initialize on DOM load
     document.addEventListener('DOMContentLoaded', init);
 
-    // Public API
     return {
-        startResearch,
+        attachFileToTextarea,
+        askQuickDocQuestion,
+        copyImageUrl,
+        deleteCurrentDoc,
+        fillImagePrompt,
+        fillPrompt,
+        handleDragLeave,
+        handleDragOver,
+        handleFileDrop,
+        handleFileSelect,
+        handleImageGenSubmit,
+        downloadFlowchart,
+        generateCurrentDocReport,
+        loadDocuments,
         loadHistoryItem,
+        launchFromVisualCommand,
+        selectDocumentById,
+        selectDocument,
+        setDepth,
         showToast,
+        startResearch,
+        submitDocQuestion,
+        syncResearchPrompt,
+        switchMode,
+        triggerFileInput,
     };
 })();
+
+window.switchMode = App.switchMode;
+window.fillPrompt = App.fillPrompt;
+window.fillImagePrompt = App.fillImagePrompt;
+window.syncResearchPrompt = App.syncResearchPrompt;
+window.setDepth = App.setDepth;
+window.launchFromVisualCommand = App.launchFromVisualCommand;
+window.attachFileToTextarea = App.attachFileToTextarea;
+window.triggerFileInput = App.triggerFileInput;
+window.handleDragOver = App.handleDragOver;
+window.handleDragLeave = App.handleDragLeave;
+window.handleFileDrop = App.handleFileDrop;
+window.handleFileSelect = App.handleFileSelect;
+window.deleteCurrentDoc = App.deleteCurrentDoc;
+window.askQuickDocQuestion = App.askQuickDocQuestion;
+window.submitDocQuestion = App.submitDocQuestion;
+window.handleImageGenSubmit = App.handleImageGenSubmit;
+window.copyImageUrl = App.copyImageUrl;
+window.downloadFlowchart = App.downloadFlowchart;
+window.generateCurrentDocReport = App.generateCurrentDocReport;
+window.loadDocuments = App.loadDocuments;

@@ -48,6 +48,7 @@ const AgentsPanel = (() => {
     function show() {
         const panel = document.getElementById('agents-panel');
         if (panel) {
+            panel.hidden = false;
             panel.style.display = 'block';
         }
         resetAgents();
@@ -62,6 +63,7 @@ const AgentsPanel = (() => {
     function hide() {
         const panel = document.getElementById('agents-panel');
         if (panel) {
+            panel.hidden = true;
             panel.style.display = 'none';
         }
     }
@@ -187,12 +189,25 @@ const AgentsPanel = (() => {
     }
 
     /**
-     * Mark all agents as completed (called when research finishes).
+     * Mark participating agents as completed when research finishes.
      */
     function markAllCompleted() {
         Object.keys(AGENTS).forEach(name => {
             if (name !== 'System') {
-                setAgentState(name, 'completed', 'Done ✓');
+                const agent = AGENTS[name];
+                if (agent && agent.id) {
+                    const card = document.getElementById(agent.id);
+                    if (card) {
+                        if (card.classList.contains('active') || card.classList.contains('completed')) {
+                            setAgentState(name, 'completed', 'Done ✓');
+                        } else {
+                            const statusText = card.querySelector('.agent-status-text');
+                            if (statusText && statusText.textContent === 'Waiting...') {
+                                statusText.textContent = 'Not required';
+                            }
+                        }
+                    }
+                }
             }
         });
     }
