@@ -1585,8 +1585,8 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         except Exception as e:
             print("Serper search error:", e)
 
-    # ── 2. Parse individual subtopics ───────────────────────────────────────
-    topic_lines = [
+    # ── 2. Parse and Expand Subtopics for Exhaustive Detail ─────────────────
+    raw_lines = [
         t.strip(" -\u2022*\t")
         for t in re.split(r"[\n,;]", topic)
         if t.strip(" -\u2022*\t") and len(t.strip()) > 2
@@ -1597,42 +1597,72 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         "give", "list", "show", "tell", "find", "get", "all", "every",
         "each", "and", "or", "a", "an", "in", "of", "for", "to"
     }
-    topic_list = [
-        t for t in topic_lines
+    custom_subtopics = [
+        t for t in raw_lines
         if not all(w.lower() in preamble_words for w in t.split())
     ]
-    if not topic_list:
-        topic_list = [topic]
+
+    is_travel_query = any(kw in topic.lower() for kw in [
+        "visit", "place", "destination", "travel", "tour", "vacation", "trip", "attraction",
+        "scotland", "scottland", "india", "japan", "europe", "paris", "london", "italy"
+    ])
+
+    if len(custom_subtopics) >= 3:
+        topic_list = custom_subtopics
+    elif is_travel_query:
+        # Extract location/subject for custom travel expansion
+        clean_loc = re.sub(
+            r'\b(give|me|all|list|show|tell|about|visitable|places|place|in|for|the|best|top|to|visit)\b',
+            ' ', topic, flags=re.IGNORECASE
+        )
+        clean_loc = re.sub(r'\s+', ' ', clean_loc).strip(' .:-').title() or topic.title()
+        
+        topic_list = [
+            f"Major Historic & Cultural Cities in {clean_loc} (Architecture, Old Towns, Museums & Heritage Sites)",
+            f"Breathtaking Natural Landscapes (Highlands, Valleys, Mountains, Lochs/Lakes & National Parks)",
+            f"Enchanting Castles, Palaces, Forts & Historical Monuments",
+            f"Scenic Coastal Regions, Islands, Beaches & Hidden Gems",
+            f"Local Experiences, Food & Drink Specialties, & Cultural Traditions",
+            f"Comprehensive Travel Guide (Best Season to Visit, Transport Modes, Estimated Budgets & Itinerary Tips)"
+        ]
+    else:
+        topic_list = [
+            f"Core Concepts, Definitions & Fundamental Architecture of {topic}",
+            f"Step-by-Step Mechanisms & How It Works",
+            f"Real-World Case Studies, Examples & Industry Applications",
+            f"Key Data Points, Comparative Analysis & Trade-offs",
+            f"Common Challenges, Pitfalls & Nuances",
+            f"Future Trends, Strategic Recommendations & Actionable Insights"
+        ]
+
     numbered_topics = "\n".join(f"  {i}. {t}" for i, t in enumerate(topic_list, 1))
 
-    # ── 3. Build LLM prompts ─────────────────────────────────────────────────
+    # ── 3. Build High-Detail LLM Prompts ──────────────────────────────────────
     system_instruction = (
-        "You are an elite AI Research Analyst. Write a COMPREHENSIVE, IN-DEPTH research report.\n\n"
-        "⚠️ MANDATORY OUTPUT ORDER — do NOT deviate from this structure:\n\n"
-        "PART 1 — FULL DETAILED ANSWER (write all content sections first, NO source links here):\n"
+        "You are an elite AI Master Researcher and Domain Specialist. Write an EXHAUSTIVE, "
+        "EXPANSIVE, HIGHLY DETAILED master research report.\n\n"
+        "⚠️ MANDATORY OUTPUT ORDER (CRITICAL):\n\n"
+        "PART 1 — FULL DETAILED ANSWER (Write ALL content sections in full exhaustive depth FIRST. NO source links here!):\n"
         "## 1. Executive Summary\n"
-        "  4-6 sentences covering all key topics, why they matter, and the key takeaways.\n\n"
-        "## 2. In-Depth Analysis\n"
-        "  For EACH topic, create a ### subsection (300-400 words minimum each) with:\n"
-        "  - Clear definition and core concepts\n"
-        "  - How it works (step-by-step or mechanistically)\n"
-        "  - Real-world examples with specific names, data, and numbers\n"
-        "  - Key statistics or facts\n"
-        "  - Common misconceptions or nuances\n"
-        "  - Current trends and future outlook\n\n"
-        "## 3. Comparative Analysis\n"
-        "  Compare and contrast the topics — patterns, relationships, trade-offs.\n\n"
-        "## 4. Key Insights & Actionable Takeaways\n"
-        "  Expert-level insights, strategic implications, and actionable recommendations.\n\n"
-        "PART 2 — SOURCES (ALWAYS THE LAST SECTION, placed AFTER all content above):\n"
+        "  Thorough 5-7 sentence overview of all key findings, recommendations, and strategic significance.\n\n"
+        "## 2. In-Depth Subtopic Breakdown\n"
+        "  For EACH of the subtopics below, write a massive, highly detailed ### section (400-600 words minimum each) containing:\n"
+        "  - Specific names, places, data, statistics, and concrete examples\n"
+        "  - Step-by-step breakdowns, key features, and deep explanations\n"
+        "  - Practical advice, budgets, timing, itineraries, or action steps\n"
+        "  - Nuances, hidden details, pros/cons, and insider recommendations\n\n"
+        "## 3. Comprehensive Comparative & Strategic Analysis\n"
+        "  Detailed comparison, pattern analysis, synergies, and trade-offs.\n\n"
+        "## 4. Key Actionable Insights & Expert Guidelines\n"
+        "  Concrete takeaways, expert tips, and implementation/travel guidance.\n\n"
+        "PART 2 — SOURCES & REFERENCES (ALWAYS THE VERY LAST SECTION):\n"
         "## 5. Sources & References\n"
-        "  Reference table from web search context.\n\n"
+        "  Reference table listing web source context.\n\n"
         "🚫 CRITICAL RULES:\n"
-        "  - Do NOT include any source URLs, links, or 'via [domain]' references in Parts 1-4.\n"
-        "  - All URLs and source attributions go ONLY in the ## 5. Sources & References section.\n"
-        "  - The reader must receive the COMPLETE, DETAILED ANSWER before ever seeing a source link.\n"
-        "  - Aim for 1500-2500 words of actual content (not counting the sources section).\n\n"
-        f"Topics to cover in-depth:\n{numbered_topics}\n"
+        "  - Do NOT include any source URLs or links in Parts 1-4. All links go ONLY in Part 2 at the very bottom.\n"
+        "  - Write the complete detailed answer in exhaustive depth before mentioning sources.\n"
+        "  - Minimum length requirement: 1,800 to 3,000 words of actual rich content.\n\n"
+        f"Mandatory Subtopics to cover in exhaustive detail:\n{numbered_topics}\n"
     )
     user_prompt = f"Research Request: {topic}\nDepth: {depth}\n"
     if search_context:
