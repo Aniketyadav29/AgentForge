@@ -1715,64 +1715,41 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     # ── 7. Offline Rich Structured Fallback (When API calls are unavailable) ─
     print("[fallback] Generating offline detailed structured research report...")
     topic_clean = topic.strip()
-    is_travel = any(kw in topic.lower() for kw in ["visit", "place", "destination", "travel", "tour", "india", "vacation", "trip", "attraction"])
 
-    if is_travel:
-        explanation_body = """### 1. North India — Historical Monuments & Himalayan Valleys
-- **Top Destinations**: Jaipur, Agra (Taj Mahal), Udaipur, Varanasi, Leh-Ladakh, Manali, Shimla.
-- **Highlights**: Iconic architecture, royal palaces, spiritual ghats, and high-altitude mountain landscapes.
-- **Best Season**: October to March (Plains & Rajasthan), May to September (Ladakh).
-- **Estimated Budget**: ₹15,000 – ₹45,000 per person (budget to mid-range).
+    # Extract target subject/location from query (e.g. "scottland", "japan", "places in X")
+    import re
+    cleaned_subject = re.sub(
+        r'\b(give|me|all|list|show|tell|about|visitable|places|place|in|for|the|best|top|to|visit)\b',
+        ' ', topic, flags=re.IGNORECASE
+    )
+    cleaned_subject = re.sub(r'\s+', ' ', cleaned_subject).strip(' .:-')
+    target_name = cleaned_subject.title() if cleaned_subject else topic.title()
 
----
+    topic_sections = []
+    for idx, t in enumerate(topic_list, 1):
+        snippets_for_t = snippet_map.get(t, []) or all_snippets[((idx-1)*2):((idx-1)*2)+3]
+        facts_list = []
+        for stitle, ssnippet, _ in snippets_for_t[:3]:
+            if ssnippet and len(ssnippet) > 15:
+                facts_list.append(f"  - **{stitle}**: {ssnippet}")
 
-### 2. South India — Backwaters, Temples & Coastal Hills
-- **Top Destinations**: Munnar, Alleppey (Houseboats), Wayanad, Ooty, Hampi, Madurai, Varkala.
-- **Highlights**: Lush tea plantations, serene backwater cruises, UNESCO heritage ruins, and pristine beaches.
-- **Best Season**: September to March.
-- **Estimated Budget**: ₹12,000 – ₹35,000 per person.
+        facts_str = "\n".join(facts_list) if facts_list else f"  - Detailed research data and key findings regarding **{target_name}**."
 
----
+        section_content = (
+            f"### {idx}. Key Highlights & Major Destinations for {target_name}\n\n"
+            f"#### Overview & Regional Insights\n"
+            f"**{target_name}** offers a diverse range of attractions, cultural landmarks, and scenic landscapes. "
+            f"When exploring {target_name}, travelers and researchers prioritize top historical sites, natural wonders, and local cultural experiences.\n\n"
+            f"#### Key Findings & Extracted Information\n"
+            f"{facts_str}\n\n"
+            f"#### Practical Travel & Planning Advice\n"
+            f"- **Best Approach**: Plan your itinerary by region or interest (e.g., historical cities, countryside, coastal areas).\n"
+            f"- **Timing & Seasonality**: Check local seasonal highlights and weather patterns before booking.\n"
+            f"- **Travel Tips**: Reserve major attraction tickets in advance and utilize regional transportation passes.\n"
+        )
+        topic_sections.append(section_content)
 
-### 3. West & Central India — Forts, Wildlife & Culture
-- **Top Destinations**: Goa, Rann of Kutch, Gir National Park, Ajanta & Ellora Caves, Khajuraho.
-- **Highlights**: Sun-drenched beaches, white salt deserts, Asiatic lion safaris, and ancient rock-cut cave art.
-- **Best Season**: November to February.
-- **Estimated Budget**: ₹14,000 – ₹40,000 per person.
-
----
-
-### 4. East & North-East India — Nature, Tea Gardens & Culture
-- **Top Destinations**: Darjeeling, Gangtok, Kaziranga National Park, Shillong, Cherrapunji, Majuli Island.
-- **Highlights**: One-horned rhino safaris, living root bridges, rolling tea estates, and vibrant tribal culture.
-- **Best Season**: October to April.
-- **Estimated Budget**: ₹16,000 – ₹42,000 per person.
-"""
-    else:
-        topic_sections = []
-        for idx, t in enumerate(topic_list, 1):
-            snippets_for_t = snippet_map.get(t, []) or all_snippets[((idx-1)*2):((idx-1)*2)+3]
-            facts_list = []
-            for stitle, ssnippet, _ in snippets_for_t[:3]:
-                if ssnippet and len(ssnippet) > 15:
-                    facts_list.append(f"  - **{stitle}**: {ssnippet}")
-
-            facts_str = "\n".join(facts_list) if facts_list else f"  - Comprehensive analysis, key empirical findings, and operational context regarding **{t}**."
-
-            section_content = (
-                f"### {idx}. Key Dimension: {t}\n\n"
-                f"#### Core Concepts & Analytical Overview\n"
-                f"**{t}** is a pivotal element of the primary research query. "
-                f"A systematic analysis reveals crucial mechanisms, underlying principles, and strategic considerations that govern its implementation.\n\n"
-                f"#### Key Findings & Extracted Intelligence\n"
-                f"{facts_str}\n\n"
-                f"#### Strategic Recommendations & Practical Guidelines\n"
-                f"- **Primary Objective**: Establish clear benchmarks and robust data governance when evaluating {t}.\n"
-                f"- **Operational Strategy**: Combine empirical data with expert domain best practices for optimized results.\n"
-                f"- **Risk Mitigation**: Continuously monitor performance indicators and adapt to evolving trends.\n"
-            )
-            topic_sections.append(section_content)
-        explanation_body = "\n---\n\n".join(topic_sections)
+    explanation_body = "\n---\n\n".join(topic_sections)
 
     # Build sources reference table (placed ONLY at the end)
     if raw_search_items:
