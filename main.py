@@ -1700,7 +1700,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 }
                 req = urllib.request.Request(
                     url, data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}, method="POST"
+                    headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}, method="POST"
                 )
                 with urllib.request.urlopen(req, timeout=50) as resp:
                     res_data = json.loads(resp.read().decode("utf-8"))
@@ -1728,7 +1728,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 req = urllib.request.Request(
                     "https://api.groq.com/openai/v1/chat/completions",
                     data=json.dumps(payload).encode("utf-8"),
-                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=40) as resp:
@@ -1754,6 +1754,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     )
     cleaned_subject = re.sub(r'\s+', ' ', cleaned_subject).strip(' .:-')
     target_name = cleaned_subject.title() if cleaned_subject else topic.title()
+
     # Group snippets by best-matching topic
     snippet_map: dict = {}
     for item in raw_search_items:
@@ -1780,19 +1781,18 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             if ssnippet and len(ssnippet) > 15:
                 facts_list.append(f"  - **{stitle}**: {ssnippet}")
 
-        facts_str = "\n".join(facts_list) if facts_list else f"  - Detailed research data and key findings regarding **{target_name}**."
+        facts_str = "\n".join(facts_list) if facts_list else f"  - Factual data, key findings, and extracted intelligence regarding **{t}**."
 
         section_content = (
-            f"### {idx}. Key Highlights & Major Destinations for {target_name}\n\n"
-            f"#### Overview & Regional Insights\n"
-            f"**{target_name}** offers a diverse range of attractions, cultural landmarks, and scenic landscapes. "
-            f"When exploring {target_name}, travelers and researchers prioritize top historical sites, natural wonders, and local cultural experiences.\n\n"
+            f"### {idx}. {t}\n\n"
+            f"#### Overview & Regional Highlights\n"
+            f"**{t}** forms an essential dimension of the overall research on *{target_name}*. "
+            f"This section explores the key attractions, local significance, and unique characteristics associated with this domain.\n\n"
             f"#### Key Findings & Extracted Information\n"
             f"{facts_str}\n\n"
-            f"#### Practical Travel & Planning Advice\n"
-            f"- **Best Approach**: Plan your itinerary by region or interest (e.g., historical cities, countryside, coastal areas).\n"
-            f"- **Timing & Seasonality**: Check local seasonal highlights and weather patterns before booking.\n"
-            f"- **Travel Tips**: Reserve major attraction tickets in advance and utilize regional transportation passes.\n"
+            f"#### Insider Tips & Planning Guidance\n"
+            f"- **Key Focus**: When exploring **{t}**, allocate sufficient time to experience both popular landmarks and lesser-known spots.\n"
+            f"- **Best Strategy**: Research transportation options and optimal visiting hours for **{t}** to maximize your experience.\n"
         )
         topic_sections.append(section_content)
 
