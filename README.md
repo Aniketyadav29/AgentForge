@@ -9,13 +9,14 @@
   <img src="https://img.shields.io/badge/Google%20Gemini-2.0%20Flash-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white" alt="Google Gemini" />
   <img src="https://img.shields.io/badge/SQLite-Persistence-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
-  
-  [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://agentforge-1.streamlit.app/)
+ 
 </p>
 
 <p align="center">
   An enterprise-grade, autonomous <b>Multi-Agent AI System</b> and <b>Document RAG Platform</b> where specialized AI agents collaborate in sequential pipelines to research complex topics, perform live web search & scraping, process multi-format documents (PDF, DOCX, CSV, XLSX, TXT), execute grounded vector RAG search & Pandas mathematical computations, and produce executive-ready markdown reports — streamed live via Server-Sent Events (SSE).
 </p>
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://agentforge-1.streamlit.app/)
 
 <p align="center">
   <a href="#-overview">Overview</a> •
