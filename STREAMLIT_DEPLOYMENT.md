@@ -19,8 +19,8 @@ python -m venv .venv
 source .venv/bin/activate  # On Linux/macOS
 # or .venv\Scripts\activate on Windows
 
-pip install -r requirements.txt
-streamlit run app.py
+pip install -r requirements-local.txt
+streamlit run streamlit_app.py
 ```
 
 Access the dashboard in your browser at `http://localhost:8501`.
@@ -31,8 +31,8 @@ Access the dashboard in your browser at `http://localhost:8501`.
 
 ### Step 1: Push Code to GitHub
 Ensure your repository contains the following files:
-- **`app.py`** (Main Streamlit app)
-- **`requirements.txt`** (Python dependencies including `streamlit`)
+- **`streamlit_app.py`** (Main Streamlit app)
+- **`requirements-local.txt`** (Full local dependencies including `streamlit`)
 - **`.streamlit/config.toml`** (Theme & server settings)
 - **`agents/`**, **`database/`**, **`models/`** (Project modules)
 
@@ -40,7 +40,7 @@ Ensure your repository contains the following files:
 1. Go to [share.streamlit.io](https://share.streamlit.io/) and sign in with your GitHub account.
 2. Click **"New app"**.
 3. Select your repository: `Aniketyadav29/AgentForge`
-4. Set the **Main file path** to: **`app.py`**
+4. Set the **Main file path** to: **`streamlit_app.py`**
 5. Click **"Advanced settings..."** and add your Secrets / API keys:
    ```toml
    GEMINI_API_KEY = "your_gemini_api_key_here"

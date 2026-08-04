@@ -1,0 +1,7 @@
+# Full local and Streamlit development profile.
+-r requirements.txt
+streamlit
+litellm
+crewai[tools]
+chromadb
+scikit-learn

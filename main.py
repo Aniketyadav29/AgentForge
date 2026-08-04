@@ -55,6 +55,7 @@ from database.db import (
     get_all_document_sessions,
     delete_document_session,
 )
+from database.runtime import IS_VERCEL, UPLOAD_DIR, ensure_runtime_dirs
 try:
     from agents.crew import create_session, get_session as get_crew_session, list_sessions, CREWAI_AVAILABLE
     RESEARCH_RUNTIME_ERROR = None if CREWAI_AVAILABLE else "CrewAI engine not available (using dynamic Gemini AI research engine)"
@@ -78,13 +79,12 @@ if not os.environ.get("SERPER_API_KEY") or os.environ.get("SERPER_API_KEY") == "
 VERSION = "1.0.0"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
-# Ensure static and upload directories exist
-os.makedirs(STATIC_DIR, exist_ok=True)
-os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)
-os.makedirs(os.path.join(STATIC_DIR, "js"), exist_ok=True)
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+if not IS_VERCEL:
+    os.makedirs(STATIC_DIR, exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "js"), exist_ok=True)
+ensure_runtime_dirs()
 
 
 @asynccontextmanager

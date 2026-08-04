@@ -8,14 +8,12 @@ import json
 import sqlite3
 from typing import Optional, List, Dict
 from datetime import datetime
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "agentforge.db")
-
+from database.runtime import DB_PATH, ensure_runtime_dirs
 
 def get_connection():
     """Get a SQLite connection with row factory enabled."""
-    conn = sqlite3.connect(DB_PATH)
+    ensure_runtime_dirs()
+    conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
 

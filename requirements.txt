@@ -1,14 +1,11 @@
-crewai[tools]
 fastapi
 uvicorn[standard]
 python-dotenv
 pydantic
 sse-starlette
-litellm
 python-multipart
 pandas
-chromadb
-scikit-learn
+numpy
 pdfplumber
 python-docx
 openpyxl
@@ -16,4 +13,3 @@ python-pptx
 Pillow
 beautifulsoup4
 pytesseract
-streamlit

@@ -256,7 +256,7 @@ cd AgentForge
 
 ### 4. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 ```
 
 ### 5. Launch the FastAPI Server
@@ -274,6 +274,14 @@ Open your browser and navigate to:
 http://localhost:8000
 ```
 Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
+
+---
+
+## ▲ Vercel Deployment
+
+Deploy the repository root as-is. Vercel uses `app.py` to start the FastAPI application and installs the lean `requirements.txt` profile, keeping the function bundle below the 500 MB Python limit. The same API routes remain available: the built-in resilient research pipeline and document-vector fallback run when the larger local CrewAI and ChromaDB packages are absent.
+
+For the complete local CrewAI, ChromaDB, and Streamlit experience, use `requirements-local.txt`. Vercel Functions use temporary `/tmp` storage, so document uploads and SQLite history are available only while the same function instance remains warm. Use external object storage and a database for durable production records.
 
 ---
 
@@ -315,7 +323,10 @@ AgentForge/
 ├── .env                    # Environment variables & API keys
 ├── .gitignore              # Git exclusions
 ├── README.md               # Project documentation
-├── requirements.txt        # Python package requirements
+├── requirements.txt        # Lean Vercel runtime dependencies
+├── requirements-local.txt  # Full local and Streamlit dependencies
+├── app.py                  # Vercel FastAPI entry point
+├── streamlit_app.py        # Streamlit dashboard
 ├── main.py                 # FastAPI server & route handlers
 ├── agentforge.db           # SQLite database (auto-generated)
 ├── agents/                 # Multi-Agent Core Engine

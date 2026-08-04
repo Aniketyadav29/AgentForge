@@ -10,6 +10,7 @@ import textwrap
 import json
 import re
 from typing import List, Dict
+from database.runtime import VECTOR_DIR, ensure_runtime_dirs
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Lazy-loaded singletons (avoid heavy imports at startup)
@@ -22,11 +23,8 @@ def _get_chroma():
     global _chroma_client
     if _chroma_client is None:
         import chromadb
-        db_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "chroma_db"
-        )
-        _chroma_client = chromadb.PersistentClient(path=db_path)
+        ensure_runtime_dirs()
+        _chroma_client = chromadb.PersistentClient(path=str(VECTOR_DIR))
     return _chroma_client
 
 
@@ -74,8 +72,8 @@ def _get_embedding_fn():
 
 
 def _fallback_path(doc_id: str) -> str:
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    fallback_dir = os.path.join(base_dir, "uploads", "vector_fallback")
+    ensure_runtime_dirs()
+    fallback_dir = os.path.join(VECTOR_DIR, "vector_fallback")
     os.makedirs(fallback_dir, exist_ok=True)
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", doc_id)
     return os.path.join(fallback_dir, f"{safe_id}.json")

@@ -13,10 +13,10 @@ if (-not (Test-Path $Python)) {
 }
 
 Write-Host "Installing dependencies..."
-& $Python -m pip install -r (Join-Path $ProjectRoot "requirements.txt")
+& $Python -m pip install -r (Join-Path $ProjectRoot "requirements-local.txt")
 
 Write-Host ""
 Write-Host "Starting AgentForge Streamlit Dashboard at http://localhost:8501"
 Write-Host "Press Ctrl+C to stop."
 Set-Location $ProjectRoot
-& $Python -m streamlit run app.py
+& $Python -m streamlit run streamlit_app.py

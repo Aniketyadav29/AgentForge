@@ -13,7 +13,7 @@ if (-not (Test-Path $Python)) {
 }
 
 Write-Host "Installing dependencies..."
-& $Python -m pip install -r (Join-Path $ProjectRoot "requirements.txt")
+& $Python -m pip install -r (Join-Path $ProjectRoot "requirements-local.txt")
 
 Write-Host ""
 Write-Host "Starting AgentForge at http://127.0.0.1:8000"
