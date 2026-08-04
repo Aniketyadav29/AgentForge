@@ -3,7 +3,7 @@
   "functions": {
     "app.py": {
       "maxDuration": 300,
-      "excludeFiles": "{.venv-codex/**,venv/**,uploads/**,chroma_db/**,__pycache__/**,streamlit_app.py,Aniketyadav29-profile/**,README*.md,PROFILE_README.md,STREAMLIT_DEPLOYMENT.md}"
+      "excludeFiles": "{.venv-codex/**,venv/**,uploads/**,chroma_db/**,__pycache__/**,streamlit_app.py,README*.md,STREAMLIT_DEPLOYMENT.md}"
     }
   }
 }
