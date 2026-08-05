@@ -7,6 +7,7 @@ const ReportViewer = (() => {
 
     let currentReport = null;
     let currentTaskId = null;
+    let currentTitle = 'AgentForge Research Report';
 
     /**
      * Show the report section and render the markdown content.
@@ -17,6 +18,7 @@ const ReportViewer = (() => {
 
         currentReport = data.report || data.report_text || '';
         currentTaskId = data.task_id || '';
+        currentTitle = data.topic || 'AgentForge Research Report';
 
         // Render markdown
         const reportBody = document.getElementById('report-body');
@@ -44,6 +46,7 @@ const ReportViewer = (() => {
         }
         currentReport = null;
         currentTaskId = null;
+        currentTitle = 'AgentForge Research Report';
     }
 
     /**
@@ -125,19 +128,40 @@ const ReportViewer = (() => {
     /**
      * Download the report as a markdown file.
      */
-    function downloadReport() {
+    function downloadReadme() {
         if (!currentReport) return;
 
-        const filename = `research_report_${currentTaskId || 'export'}.md`;
         const blob = new Blob([currentReport], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = 'README.md';
         a.click();
 
         URL.revokeObjectURL(url);
+    }
+
+    async function downloadPdf(exportUrl) {
+        if (!currentReport) return false;
+
+        const response = await fetch(exportUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: currentTitle, report: currentReport }),
+        });
+        if (!response.ok) {
+            throw new Error('PDF export could not be created.');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'agentforge-research-report.pdf';
+        anchor.click();
+        URL.revokeObjectURL(url);
+        return true;
     }
 
     /**
@@ -154,7 +178,8 @@ const ReportViewer = (() => {
         showReport,
         hideReport,
         copyReport,
-        downloadReport,
+        downloadReadme,
+        downloadPdf,
         renderMarkdown,
     };
 })();

@@ -96,6 +96,12 @@ class DocumentUploadResponse(BaseModel):
     timestamp: str
 
 
+class ResearchPdfExportRequest(BaseModel):
+    """Research content provided by the browser for PDF export."""
+    title: str = Field(default="AgentForge Research Report", min_length=1, max_length=500)
+    report: str = Field(..., min_length=1, max_length=200000)
+
+
 class DocumentQueryRequest(BaseModel):
     """Request to ask a question about an uploaded document."""
     question: str = Field(

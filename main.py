@@ -22,6 +22,7 @@ import threading
 import time
 from datetime import datetime
 from contextlib import asynccontextmanager
+from io import BytesIO
 
 # Force UTF-8 stdout encoding on Windows
 if hasattr(sys.stdout, 'reconfigure'):
@@ -33,12 +34,12 @@ if hasattr(sys.stdout, 'reconfigure'):
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from sse_starlette.sse import EventSourceResponse
 
-from models.schemas import ResearchRequest, ResearchResponse, HealthResponse
+from models.schemas import ResearchPdfExportRequest, ResearchRequest, ResearchResponse, HealthResponse
 from models.schemas import (
     DocumentUploadResponse, DocumentQueryRequest,
     DocumentQueryResponse, SourceChunk,
@@ -399,6 +400,22 @@ async def get_research_result(task_id: str):
             result["activity_log"] = []
 
     return result
+
+
+@app.post("/api/research/export/pdf")
+async def export_research_pdf(request: ResearchPdfExportRequest):
+    """Create a downloadable PDF from the research report currently shown in the browser."""
+    try:
+        from agents.report_export import build_research_pdf
+        pdf_data = build_research_pdf(request.title, request.report)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to create PDF export: {exc}") from exc
+
+    return StreamingResponse(
+        BytesIO(pdf_data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=agentforge-research-report.pdf"},
+    )
 
 
 @app.get("/api/history")
@@ -1561,7 +1578,6 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     groq_key = os.environ.get("GROQ_API_KEY")
 
     # ── 1. Fetch live Serper search results ──────────────────────────────────
-    search_context = ""
     raw_search_items = []
     if serper_key and serper_key != "your_serper_api_key_here":
         try:
@@ -1574,18 +1590,17 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 raw_search_items = data.get("organic", [])
-                snippets = []
-                for item in raw_search_items[:8]:
-                    title = item.get("title", "")
-                    snippet = item.get("snippet", "")
-                    link = item.get("link", "")
-                    snippets.append(f"- **{title}**: {snippet} (Source: {link})")
-                if snippets:
-                    search_context = "\n".join(snippets)
         except Exception as e:
             print("Serper search error:", e)
 
-    # ── 2. Parse and Expand Subtopics for Exhaustive Detail ─────────────────
+    depth_profiles = {
+        "quick": {"sections": 3, "word_range": "600-900", "gemini_tokens": 1800, "groq_tokens": 1500},
+        "detailed": {"sections": 5, "word_range": "1,200-1,700", "gemini_tokens": 3000, "groq_tokens": 2500},
+        "deep": {"sections": 6, "word_range": "1,800-2,500", "gemini_tokens": 4096, "groq_tokens": 3200},
+    }
+    report_profile = depth_profiles.get(depth, depth_profiles["detailed"])
+
+    # ── 2. Define research lenses ───────────────────────────────────────────
     raw_lines = [
         t.strip(" -\u2022*\t")
         for t in re.split(r"[\n,;]", topic)
@@ -1602,15 +1617,38 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         if not all(w.lower() in preamble_words for w in t.split())
     ]
 
-    is_travel_query = any(kw in topic.lower() for kw in [
+    topic_lower = topic.lower()
+    is_travel_query = any(kw in topic_lower for kw in [
         "visit", "place", "destination", "travel", "tour", "vacation", "trip", "attraction",
         "scotland", "scottland", "india", "japan", "europe", "paris", "london", "italy"
     ])
+    is_comparison_query = any(term in topic_lower for term in [" vs ", "versus", "compare", "difference between", "better than"])
+    is_how_to_query = topic_lower.startswith("how ") or any(term in topic_lower for term in ["how to", "steps to", "implementation", "strategy for"])
+    is_current_query = any(term in topic_lower for term in ["latest", "current", "today", "recent", "2026", "trend", "outlook"])
 
     if len(custom_subtopics) >= 3:
-        topic_list = custom_subtopics
+        question_type = "multi-part research request"
+        topic_list = custom_subtopics[:report_profile["sections"]]
+    elif is_comparison_query:
+        question_type = "comparison and decision request"
+        topic_list = [
+            "Decision criteria and context",
+            "Evidence-based comparison of the alternatives",
+            "Trade-offs, risks, and constraints",
+            "Fit for different use cases",
+            "Decision guidance and next steps",
+        ][:report_profile["sections"]]
+    elif is_how_to_query:
+        question_type = "how-to or implementation request"
+        topic_list = [
+            "Desired outcome, prerequisites, and constraints",
+            "Recommended approach and sequence of actions",
+            "Execution details, dependencies, and safeguards",
+            "Common failure modes and how to avoid them",
+            "Validation criteria and next steps",
+        ][:report_profile["sections"]]
     elif is_travel_query:
-        # Extract location/subject for custom travel expansion
+        question_type = "travel or destination planning request"
         clean_loc = re.sub(
             r'\b(give|me|all|list|show|tell|about|visitable|places|place|in|for|the|best|top|to|visit)\b',
             ' ', topic, flags=re.IGNORECASE
@@ -1618,56 +1656,72 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         clean_loc = re.sub(r'\s+', ' ', clean_loc).strip(' .:-').title() or topic.title()
         
         topic_list = [
-            f"Major Historic & Cultural Cities in {clean_loc} (Architecture, Old Towns, Museums & Heritage Sites)",
-            f"Breathtaking Natural Landscapes (Highlands, Valleys, Mountains, Lochs/Lakes & National Parks)",
-            f"Enchanting Castles, Palaces, Forts & Historical Monuments",
-            f"Scenic Coastal Regions, Islands, Beaches & Hidden Gems",
-            f"Local Experiences, Food & Drink Specialties, & Cultural Traditions",
-            f"Comprehensive Travel Guide (Best Season to Visit, Transport Modes, Estimated Budgets & Itinerary Tips)"
-        ]
-    else:
+            f"Priority destinations and experiences in {clean_loc}",
+            "Culture, heritage, and distinctive local experiences",
+            "Nature, outdoor opportunities, and seasonal considerations",
+            "Practical planning: timing, transport, cost, and accessibility",
+            "Risks, trade-offs, and itinerary design",
+            "Decision-ready recommendations",
+        ][:report_profile["sections"]]
+    elif is_current_query:
+        question_type = "current-state or trend analysis request"
         topic_list = [
-            f"Core Concepts, Definitions & Fundamental Architecture of {topic}",
-            f"Step-by-Step Mechanisms & How It Works",
-            f"Real-World Case Studies, Examples & Industry Applications",
-            f"Key Data Points, Comparative Analysis & Trade-offs",
-            f"Common Challenges, Pitfalls & Nuances",
-            f"Future Trends, Strategic Recommendations & Actionable Insights"
-        ]
+            "Current state and key developments",
+            "Drivers, stakeholders, and relevant context",
+            "Evidence, signals, and competing interpretations",
+            "Near-term implications and risks",
+            "Outlook and decision considerations",
+        ][:report_profile["sections"]]
+    else:
+        question_type = "explanatory research request"
+        topic_list = [
+            f"Scope, definitions, and strategic relevance of {topic}",
+            "Current landscape and material evidence",
+            "Drivers, operating model, and real-world applications",
+            "Benefits, trade-offs, and key risks",
+            "Implications for decisions and implementation",
+            "Outlook and recommended next steps",
+        ][:report_profile["sections"]]
 
     numbered_topics = "\n".join(f"  {i}. {t}" for i, t in enumerate(topic_list, 1))
+    source_dossier = "\n\n".join(
+        f"[{index}] {item.get('title', f'Source {index}')}\n"
+        f"URL: {item.get('link', '')}\n"
+        f"Extract: {item.get('snippet', '')}"
+        for index, item in enumerate(raw_search_items[:8], 1)
+    )
 
-    # ── 3. Build High-Detail LLM Prompts ──────────────────────────────────────
+    # ── 3. Build evidence-led LLM prompts ────────────────────────────────────
     system_instruction = (
-        "You are an elite AI Master Researcher and Domain Specialist. Write an EXHAUSTIVE, "
-        "EXPANSIVE, HIGHLY DETAILED master research report.\n\n"
-        "⚠️ MANDATORY OUTPUT ORDER (CRITICAL):\n\n"
-        "PART 1 — FULL DETAILED ANSWER (Write ALL content sections in full exhaustive depth FIRST. NO source links here!):\n"
-        "## 1. Executive Summary\n"
-        "  Thorough 5-7 sentence overview of all key findings, recommendations, and strategic significance.\n\n"
-        "## 2. In-Depth Subtopic Breakdown\n"
-        "  For EACH of the subtopics below, write a massive, highly detailed ### section (400-600 words minimum each) containing:\n"
-        "  - Specific names, places, data, statistics, and concrete examples\n"
-        "  - Step-by-step breakdowns, key features, and deep explanations\n"
-        "  - Practical advice, budgets, timing, itineraries, or action steps\n"
-        "  - Nuances, hidden details, pros/cons, and insider recommendations\n\n"
-        "## 3. Comprehensive Comparative & Strategic Analysis\n"
-        "  Detailed comparison, pattern analysis, synergies, and trade-offs.\n\n"
-        "## 4. Key Actionable Insights & Expert Guidelines\n"
-        "  Concrete takeaways, expert tips, and implementation/travel guidance.\n\n"
-        "PART 2 — SOURCES & REFERENCES (ALWAYS THE VERY LAST SECTION):\n"
-        "## 5. Sources & References\n"
-        "  Reference table listing web source context.\n\n"
-        "🚫 CRITICAL RULES:\n"
-        "  - Do NOT include any source URLs or links in Parts 1-4. All links go ONLY in Part 2 at the very bottom.\n"
-        "  - Write the complete detailed answer in exhaustive depth before mentioning sources.\n"
-        "  - Minimum length requirement: 1,800 to 3,000 words of actual rich content.\n\n"
-        f"Mandatory Subtopics to cover in exhaustive detail:\n{numbered_topics}\n"
+        "You are a senior research analyst preparing a decision-ready research brief. "
+        "Write with precision, intellectual honesty, and a professional but readable tone.\n\n"
+        "Start every response with a section titled `## Understanding the Question`. Explain the user's intent, "
+        "question type, key terms, assumptions, and the information required for a useful answer.\n\n"
+        "After that first section, design the answer around the request instead of forcing a universal report format:\n"
+        "- For a comparison, use decision criteria, side-by-side evidence, trade-offs, and a recommendation.\n"
+        "- For a how-to request, use prerequisites, sequenced actions, safeguards, and validation criteria.\n"
+        "- For travel planning, use destinations, practical planning, timing, and itinerary choices.\n"
+        "- For an explanatory request, use concepts, mechanisms, examples, and implications.\n"
+        "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n\n"
+        "Use only headings that improve the specific answer. Give a direct answer early, then provide the level "
+        "of detail the question needs. Include a conclusion, recommendations, limitations, or source list only "
+        "when they help answer the request; do not add empty sections.\n\n"
+        "Research standards:\n"
+        "- Support externally verifiable claims with inline [N] citations that map to the supplied source dossier.\n"
+        "- Do not invent data, quotations, dates, costs, or source details. If the dossier is insufficient, say so plainly.\n"
+        "- Avoid filler, generic travel advice, repeated conclusions, and promotional language.\n"
+        "- Explain why each finding matters; label recommendations and inferences as analysis.\n"
+        "- Use paragraphs for reasoning and bullets only where they improve scanability.\n"
+        f"- Target {report_profile['word_range']} words, scaled to the evidence available.\n\n"
+        f"Classified request type: {question_type}.\n"
+        f"Required research lenses:\n{numbered_topics}\n"
     )
     user_prompt = f"Research Request: {topic}\nDepth: {depth}\n"
-    if search_context:
-        user_prompt += f"\nLive Web Context (use as reference, not as full answer):\n{search_context}\n"
-    user_prompt += "\nWrite the complete research report following the mandatory structure."
+    if source_dossier:
+        user_prompt += f"\nSource dossier:\n{source_dossier}\n"
+    else:
+        user_prompt += "\nNo live source dossier was retrieved. Clearly separate general context from current, sourced claims.\n"
+    user_prompt += "\nWrite the complete research brief using the required structure."
 
     # ── 4. Helper: call LLM with 60s timeout ─────────────────────────────────
     LLM_TIMEOUT = 60  # 60s allows Gemini to complete full generation cleanly
@@ -1696,7 +1750,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
                 payload = {
                     "contents": [{"parts": [{"text": f"{system_instruction}\n\n{user_prompt}"}]}],
-                    "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.3}
+                    "generationConfig": {"maxOutputTokens": report_profile["gemini_tokens"], "temperature": 0.25}
                 }
                 req = urllib.request.Request(
                     url, data=json.dumps(payload).encode("utf-8"),
@@ -1712,7 +1766,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 return result
             print(f"[fallback] Gemini {model} failed or timed out, trying next...")
 
-    # ── 6. Try Groq (Secondary - max 2048 tokens to stay under 6000 TPM limit) ──
+    # ── 6. Try Groq ─────────────────────────────────────────────────────────
     if groq_key and groq_key not in ("your_groq_api_key_here", ""):
         for gmodel in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]:
             def _try_groq(m=gmodel):
@@ -1722,8 +1776,8 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                         {"role": "system", "content": system_instruction},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "temperature": 0.3,
-                    "max_tokens": 2048,
+                    "temperature": 0.25,
+                    "max_tokens": report_profile["groq_tokens"],
                 }
                 req = urllib.request.Request(
                     "https://api.groq.com/openai/v1/chat/completions",
@@ -1742,114 +1796,152 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 return result
             print(f"[fallback] Groq {gmodel} failed or timed out, trying next...")
 
-    # ── 7. Offline Rich Structured Fallback (When API calls are unavailable) ─
-    print("[fallback] Generating offline detailed structured research report...")
-    topic_clean = topic.strip()
-
-    # Extract target subject/location from query (e.g. "scottland", "japan", "places in X")
-    import re
-    cleaned_subject = re.sub(
-        r'\b(give|me|all|list|show|tell|about|visitable|places|place|in|for|the|best|top|to|visit)\b',
-        ' ', topic, flags=re.IGNORECASE
-    )
-    cleaned_subject = re.sub(r'\s+', ' ', cleaned_subject).strip(' .:-')
-    target_name = cleaned_subject.title() if cleaned_subject else topic.title()
-
-    # Group snippets by best-matching topic
-    snippet_map: dict = {}
-    for item in raw_search_items:
-        for t in topic_list:
-            t_words = [w for w in t.lower().split() if len(w) > 3]
-            title_lower = item.get("title", "").lower()
-            snip = item.get("snippet", "")
-            if any(w in title_lower for w in t_words) or t.lower() in title_lower:
-                if t not in snippet_map:
-                    snippet_map[t] = []
-                snippet_map[t].append((item.get("title", ""), snip, item.get("link", "#")))
-
-    # Also collect all snippets not matched to any topic (use as general pool)
-    all_snippets = [
-        (item.get("title", ""), item.get("snippet", ""), item.get("link", "#"))
-        for item in raw_search_items
+    # ── 7. Source-grounded fallback when model generation is unavailable ─────
+    print("[fallback] Generating source-grounded research brief...")
+    source_records = [
+        {
+            "index": index,
+            "title": item.get("title", f"Source {index}"),
+            "snippet": item.get("snippet", "").strip(),
+            "link": item.get("link", ""),
+        }
+        for index, item in enumerate(raw_search_items[:10], 1)
     ]
+    response_shapes = {
+        "multi-part research request": (
+            "This request contains multiple research topics. A useful response should address each requested "
+            "area separately, identify how the areas connect, and avoid treating a broad question as one claim.",
+            "## Answer by Requested Topic",
+            "The strongest next step is to validate the findings most relevant to each requested topic before combining them into one decision.",
+        ),
+        "comparison and decision request": (
+            "This is a comparison question. A useful answer needs explicit decision criteria, evidence for each "
+            "alternative, and trade-offs that change the recommendation for different use cases.",
+            "## Comparison and Decision Guidance",
+            "No alternative should be treated as universally best; the appropriate choice depends on the criteria and constraints that matter most to the user.",
+        ),
+        "how-to or implementation request": (
+            "This is an implementation question. A useful answer must identify the desired outcome, prerequisites, "
+            "action sequence, dependencies, and checks that confirm the approach is working.",
+            "## Recommended Approach",
+            "Use the evidence to validate the prerequisites and safeguards before progressing through the proposed actions.",
+        ),
+        "travel or destination planning request": (
+            "This is a travel-planning question. A useful answer should balance the user's likely interests with "
+            "timing, accessibility, budget, logistics, and the reliability of practical information.",
+            "## Tailored Travel Guidance",
+            "Confirm opening times, local transport, prices, and seasonal conditions directly with official sources before finalizing an itinerary.",
+        ),
+        "current-state or trend analysis request": (
+            "This request asks for a current-state assessment. A useful answer must distinguish verified developments "
+            "from interpretation, account for recency, and explain what the evidence may mean next.",
+            "## Current Analysis",
+            "The conclusion should remain conditional until the most recent, authoritative evidence confirms the observed direction.",
+        ),
+        "explanatory research request": (
+            "This is an explanatory question. A useful answer should define the core concepts, explain the mechanism "
+            "or context, and use examples only where they make the explanation clearer.",
+            "## Explanation and Analysis",
+            "The key conclusion should follow from the evidence and the underlying mechanism, not from unsupported generalizations.",
+        ),
+    }
+    question_analysis, answer_heading, bottom_line = response_shapes[question_type]
 
     topic_sections = []
-    for idx, t in enumerate(topic_list, 1):
-        snippets_for_t = snippet_map.get(t, []) or all_snippets[((idx-1)*2):((idx-1)*2)+3]
-        facts_list = []
-        for stitle, ssnippet, _ in snippets_for_t[:3]:
-            if ssnippet and len(ssnippet) > 15:
-                facts_list.append(f"  - **{stitle}**: {ssnippet}")
-
-        facts_str = "\n".join(facts_list) if facts_list else f"  - Factual data, key findings, and extracted intelligence regarding **{t}**."
-
-        section_content = (
-            f"### {idx}. {t}\n\n"
-            f"#### Overview & Regional Highlights\n"
-            f"**{t}** forms an essential dimension of the overall research on *{target_name}*. "
-            f"This section explores the key attractions, local significance, and unique characteristics associated with this domain.\n\n"
-            f"#### Key Findings & Extracted Information\n"
-            f"{facts_str}\n\n"
-            f"#### Insider Tips & Planning Guidance\n"
-            f"- **Key Focus**: When exploring **{t}**, allocate sufficient time to experience both popular landmarks and lesser-known spots.\n"
-            f"- **Best Strategy**: Research transportation options and optimal visiting hours for **{t}** to maximize your experience.\n"
+    for index, research_lens in enumerate(topic_list, 1):
+        start = (index - 1) * 2
+        section_sources = source_records[start:start + 2] or source_records[:2]
+        evidence_items = [
+            f"- {source['snippet']} [{source['index']}]"
+            for source in section_sources
+            if len(source["snippet"]) > 15
+        ]
+        if evidence_items:
+            evidence = "\n".join(evidence_items)
+            assessment = (
+                "The retrieved material provides an initial evidence base for this lens. "
+                "Before making a material decision, compare the original sources for recency, "
+                "scope, and any conflicting evidence."
+            )
+        else:
+            evidence = "- No retrieved source directly supports a specific finding for this lens."
+            assessment = (
+                "The available research is insufficient for a defensible conclusion on this point. "
+                "Targeted primary sources or subject-matter validation are needed."
+            )
+        topic_sections.append(
+            f"### {index}. {research_lens}\n\n"
+            f"**Evidence from retrieved sources**\n{evidence}\n\n"
+            f"**Assessment**\n{assessment}"
         )
-        topic_sections.append(section_content)
 
-    explanation_body = "\n---\n\n".join(topic_sections)
-
-    # Build sources reference table (placed ONLY at the end)
-    if raw_search_items:
+    findings_body = "\n\n---\n\n".join(topic_sections)
+    if source_records:
         source_rows = []
-        for sidx, item in enumerate(raw_search_items[:10], 1):
-            stitle = item.get("title", f"Source {sidx}").replace("|", "-")
-            ssnippet = item.get("snippet", "").replace("|", "-")
-            slink = item.get("link", "#")
-            domain = slink.split('/')[2] if '://' in slink else "web source"
-            source_rows.append(f"| {sidx} | **{stitle[:70]}** | {ssnippet[:120]}… | [{domain}]({slink}) |")
+        for source in source_records:
+            title = source["title"].replace("|", "-")
+            snippet = source["snippet"].replace("|", "-")
+            link = source["link"]
+            domain = link.split("/")[2] if "://" in link else "web source"
+            source_rows.append(
+                f"| {source['index']} | **{title[:70]}** | {snippet[:120]} | [{domain}]({link}) |"
+            )
         sources_table = (
-            "| # | Title | Summary | Source |\n"
-            "|:--|:------|:--------|:-------|\n"
+            "| # | Title | Retrieved evidence | Source |\n"
+            "|:--|:------|:-------------------|:-------|\n"
             + "\n".join(source_rows)
         )
+        resource_overview = "\n".join(
+            f"- [{source['index']}] **{source['title']}** — "
+            f"{source['link'].split('/')[2] if '://' in source['link'] else 'web source'}"
+            for source in source_records
+        )
+        method_statement = (
+            f"This brief is based on {len(source_records)} retrieved web results. "
+            "The snippets are useful signals, but the linked source pages should be reviewed before relying on a claim."
+        )
     else:
-        sources_table = "_No live web sources were retrieved._"
+        sources_table = "_No live web sources were retrieved for this request._"
+        resource_overview = "- No live source resources were available for this request."
+        method_statement = (
+            "No live source dossier was available, so this brief does not make topic-specific factual claims. "
+            "Add a Serper API key to obtain a source-backed report."
+        )
 
-    interconnect = (
-        f"The research findings presented above synthesize key aspects of **{topic}**. "
-        f"For real-time dynamic AI generation on any custom topic, connect your Gemini or Groq API key in the left sidebar."
-    )
+    if source_records:
+        resources_section = f"""## Evidence and Resources
 
-    api_notice = ""
-    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY")):
-        api_notice = "\n> 💡 **Notice**: To generate dynamic custom AI reports for any request, enter your **Gemini API Key** in the sidebar settings or Streamlit Cloud Secrets!\n"
+{method_statement}
 
-    return f"""# Research Report: {topic}
+### Resources Consulted
 
-## 1. Executive Summary
+{resource_overview}
 
-This report provides a comprehensive, structured analysis answering: **{topic}**. 
-Synthesized from live research data, the following sections deliver detailed breakdowns, actionable insights, practical advice, and key recommendations.
+## Sources
 
----
+{sources_table}"""
+    else:
+        resources_section = f"""## Evidence and Resources
 
-## 2. In-Depth Research Breakdown
+{method_statement}"""
 
-{explanation_body}
+    return f"""# Research Response: {topic}
 
----
+## Understanding the Question
 
-## 3. Key Insights & Actionable Takeaways
+**Request type:** {question_type.title()}
 
-{interconnect}
+{question_analysis}
 
----
+{answer_heading}
 
-## 4. Verified Sources & References
+{findings_body}
 
-> All source links are listed below. The complete detailed answer above is fully self-contained.
+{resources_section}
 
-{sources_table}
+## Bottom Line
+
+{bottom_line}
 """
 
 

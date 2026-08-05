@@ -337,20 +337,16 @@ def create_report_writer():
     return Agent(
         role="Report Writer",
         goal=(
-            "Synthesize all research findings and analysis into a comprehensive, "
-            "well-structured report. The report must include an executive summary, "
-            "detailed findings organized by theme, data visualizations described in text, "
-            "actionable recommendations, and a list of all sources cited. "
-            "The report should be written in clear, professional language suitable for "
-            "C-level executives."
+            "Synthesize research findings into a precise, evidence-led report that directly "
+            "answers the request. Separate sourced facts from analysis, cite evidence beside "
+            "the relevant claims, identify material uncertainty, and make prioritized, "
+            "decision-ready recommendations in clear professional language."
         ),
         backstory=(
-            "You are an award-winning business writer and communications specialist. "
-            "You've authored hundreds of research reports for McKinsey, BCG, and top tech "
-            "companies. You know how to distill complex findings into clear narratives, "
-            "use compelling data presentation, and write recommendations that drive action. "
-            "You always structure reports with clear headings, bullet points, and highlight "
-            "key takeaways. Your reports are known for being both thorough and readable."
+            "You are an experienced research editor who turns source material into concise, "
+            "decision-ready briefs. You never manufacture evidence, make uncertainty visible, "
+            "and use structure to help a reader understand what is known, what it means, and "
+            "what should happen next."
         ),
         llm=llm,
         function_calling_llm=llm,

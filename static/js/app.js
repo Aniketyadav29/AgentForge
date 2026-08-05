@@ -31,8 +31,11 @@ const App = (() => {
         const copyBtn = document.getElementById('btn-copy-report');
         if (copyBtn) copyBtn.addEventListener('click', handleCopyReport);
 
-        const downloadBtn = document.getElementById('btn-download-report');
-        if (downloadBtn) downloadBtn.addEventListener('click', handleDownloadReport);
+        const readmeDownloadBtn = document.getElementById('btn-download-readme');
+        if (readmeDownloadBtn) readmeDownloadBtn.addEventListener('click', handleDownloadReadme);
+
+        const pdfDownloadBtn = document.getElementById('btn-download-pdf');
+        if (pdfDownloadBtn) pdfDownloadBtn.addEventListener('click', handleDownloadPdf);
     }
 
     function cleanup() {
@@ -714,9 +717,18 @@ const App = (() => {
         showToast(success ? 'Report copied.' : 'No report to copy.', success ? 'success' : 'error');
     }
 
-    function handleDownloadReport() {
-        ReportViewer.downloadReport();
-        showToast('Report downloaded.', 'success');
+    function handleDownloadReadme() {
+        ReportViewer.downloadReadme();
+        showToast('README.md downloaded.', 'success');
+    }
+
+    async function handleDownloadPdf() {
+        try {
+            const downloaded = await ReportViewer.downloadPdf(apiUrl('/api/research/export/pdf'));
+            showToast(downloaded ? 'PDF downloaded.' : 'No report to download.', downloaded ? 'success' : 'error');
+        } catch (error) {
+            showToast(error.message || 'Could not create the PDF export.', 'error');
+        }
     }
 
     function setLoadingState(loading) {
