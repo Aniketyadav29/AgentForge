@@ -67,6 +67,27 @@ def detect_language_instruction(topic: str) -> str:
 
 
 def _user_intent_note(topic: str) -> str:
+    topic_lower = topic.lower()
+    is_recipe = any(kw in topic_lower for kw in [
+        "recipe", "cook", "bake", "dish", "food", "bhature", "bhatura",
+        "chole", "chhole", "biryani", "curry", "cake", "bread", "soup",
+        "pasta", "pizza", "dessert", "make at home", "homemade", "ingredients",
+        "paneer", "dal", "roti", "naan", "dosa", "samosa", "tikka", "masala",
+    ])
+    if is_recipe:
+        return (
+            "\n\n🎯 **PRIMARY USER INTENT DIRECTIVE (CRITICAL):**\n"
+            f"The user is asking for a RECIPE: '{topic}'.\n"
+            "Your output MUST be a complete, practical recipe formatted like a real cookbook entry:\n"
+            "1. Start with the dish name and a brief 1-2 sentence introduction\n"
+            "2. List ALL ingredients with exact quantities and measurements\n"
+            "3. Provide clear, numbered step-by-step cooking instructions\n"
+            "4. Include preparation time, cooking time, and serving size\n"
+            "5. Add pro tips, common mistakes to avoid, and variations\n"
+            "6. End with serving suggestions and storage tips\n\n"
+            "Do NOT format this as a research report, business analysis, or academic paper! "
+            "Write it like a friendly, detailed cookbook recipe that anyone can follow."
+        )
     return (
         "\n\n🎯 **PRIMARY USER INTENT DIRECTIVE (CRITICAL):**\n"
         f"The primary goal is to answer the user's exact request: '{topic}'.\n"
@@ -188,13 +209,19 @@ def create_report_task(agent, topic: str):
 
     return Task(
         description=(
-            f"Write a professional, evidence-led research brief that directly answers: '{topic}'.\n\n"
+            f"Write a professional response that directly answers: '{topic}'.\n\n"
             f"Begin with **Understanding the Question**. Explain the user's intent, key terms, assumptions, "
             f"scope, and the evidence needed to answer responsibly.\n\n"
-            f"Then choose a structure that fits the request rather than applying a fixed template. Use comparison "
-            f"criteria and trade-offs for a comparison, sequenced actions and safeguards for a how-to question, "
-            f"practical planning for travel, and concepts, mechanisms, examples, and implications for explanatory "
-            f"questions. Lead with a direct answer, then add only the sections that help the user make progress.\n\n"
+            f"Then choose a structure that fits the request rather than applying a fixed template:\n"
+            f"- For a comparison, use decision criteria, trade-offs, and a recommendation.\n"
+            f"- For a how-to question, use sequenced actions and safeguards.\n"
+            f"- For travel planning, use destinations, practical planning, and itinerary choices.\n"
+            f"- For a RECIPE or COOKING question, present the dish name as heading, then provide a complete "
+            f"ingredient list with exact quantities, followed by clear numbered step-by-step cooking instructions, "
+            f"pro tips and common mistakes to avoid, variations, and serving suggestions. Write it like a real "
+            f"cookbook — warm, practical, and easy to follow. Do NOT format a recipe as a corporate report.\n"
+            f"- For explanatory questions, use concepts, mechanisms, examples, and implications.\n\n"
+            f"Lead with a direct answer, then add only the sections that help the user make progress.\n\n"
             f"Attach a source title or URL to factual claims. Clearly distinguish evidence from inference. Include "
             f"a conclusion, recommendations, limitations, or references only where each adds value to this request.\n\n"
             f"Do not invent statistics, costs, dates, quotations, or source details. Avoid generic filler, "
@@ -205,7 +232,8 @@ def create_report_task(agent, topic: str):
         ),
         expected_output=(
             "A polished markdown answer that starts by interpreting the question, then uses a question-appropriate "
-            "structure, sourced evidence, and only the conclusion or next steps that the request needs."
+            "structure. For recipes, this means a complete ingredient list and step-by-step cooking instructions. "
+            "For research, this means sourced evidence and the conclusion or next steps that the request needs."
         ),
         agent=agent,
     )

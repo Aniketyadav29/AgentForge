@@ -1560,6 +1560,129 @@ def _render_flowchart_svg(steps: list, prompt: str) -> str:
     )
 
 
+def _build_recipe_fallback_output(topic: str, source_records: list, question_analysis: str, bottom_line: str) -> str:
+    """
+    Build a natural, cookbook-style recipe output from search snippets.
+    Used when LLMs are unavailable and the query is a recipe/cooking request.
+    """
+    import re
+
+    # Extract a clean dish name from the topic
+    dish_name = re.sub(
+        r'\b(give|me|the|a|an|recipe|of|for|how|to|make|cook|prepare|at|home|homemade|please|tell|show)\b',
+        ' ', topic, flags=re.IGNORECASE
+    )
+    dish_name = re.sub(r'\s+', ' ', dish_name).strip(' .:-').title() or topic.title()
+
+    # Collect all snippet text for extracting useful info
+    all_snippets = "\n".join(s["snippet"] for s in source_records if s.get("snippet"))
+
+    # Build source references
+    source_links = ""
+    if source_records:
+        source_items = []
+        for s in source_records:
+            link = s.get("link", "")
+            title = s.get("title", f"Source {s['index']}")
+            domain = link.split("/")[2] if "://" in link else "web source"
+            source_items.append(f"- [{title}]({link}) — *{domain}*")
+        source_links = "\n".join(source_items)
+
+    # Build the recipe-style output
+    recipe_output = f"""# 🍽️ {dish_name} — Complete Recipe
+
+## About This Dish
+
+{question_analysis}
+
+**{dish_name}** is a beloved dish that's enjoyed by millions. Below is a complete recipe guide compiled from trusted online sources.
+
+---
+
+## 📋 Ingredients
+
+> **Note:** The ingredients and quantities below are compiled from multiple trusted recipe sources. Adjust quantities based on your serving size and taste preference.
+
+### For the Main Dish
+Based on the retrieved recipe sources, here are the key ingredients you'll need:
+
+"""
+
+    # Try to extract ingredient hints from snippets
+    ingredient_hints = []
+    for snippet in (s["snippet"] for s in source_records if s.get("snippet")):
+        # Look for common ingredient patterns
+        if any(word in snippet.lower() for word in ["cup", "tbsp", "tsp", "gram", "kg", "ml", "liter", "tablespoon", "teaspoon", "pinch", "salt", "oil", "water", "flour", "sugar"]):
+            ingredient_hints.append(f"- {snippet.strip()}")
+
+    if ingredient_hints:
+        recipe_output += "\n".join(ingredient_hints[:8]) + "\n\n"
+    else:
+        recipe_output += "*(Refer to the source links below for exact ingredient quantities)*\n\n"
+
+    # Add info from snippets as recipe context
+    recipe_output += """---
+
+## 👨‍🍳 How to Make """ + dish_name + """
+
+### Preparation Steps
+
+Based on our research from multiple recipe sources, here's what the experts recommend:
+
+"""
+
+    # Include relevant snippets as recipe guidance
+    step_snippets = [s for s in source_records if s.get("snippet") and len(s["snippet"]) > 20]
+    if step_snippets:
+        for idx, s in enumerate(step_snippets[:6], 1):
+            snippet = s["snippet"].strip()
+            recipe_output += f"**Step {idx}.** {snippet} [{s['index']}]\n\n"
+    else:
+        recipe_output += "*(Detailed steps are available in the source links below)*\n\n"
+
+    recipe_output += f"""---
+
+## 💡 Pro Tips & Common Mistakes
+
+- **Taste as you go** — Adjust salt, spices, and seasoning to your personal preference
+- **Don't rush the cooking** — Give each stage enough time for flavors to develop
+- **Use fresh ingredients** — Fresh spices and ingredients make a noticeable difference
+- **Temperature matters** — Make sure oil/pan is at the right temperature before adding ingredients
+- **Practice makes perfect** — Your first attempt teaches you the most!
+
+---
+
+## 🍛 Serving Suggestions
+
+- Serve {dish_name} hot and fresh for the best taste
+- Pair with complementary side dishes, chutneys, or salads
+- Garnish with fresh herbs, lemon wedges, or a sprinkle of spice
+
+---
+
+"""
+
+    if source_links:
+        recipe_output += f"""## 📚 Recipe Sources
+
+The following sources were consulted for this recipe:
+
+{source_links}
+
+---
+
+"""
+
+    recipe_output += f"""## Enjoy!
+
+{bottom_line}
+
+*For the most detailed ingredient quantities and step-by-step photos, we recommend visiting the source links above.*
+"""
+
+    return recipe_output
+
+
 def _build_fallback_research_report(topic: str, depth: str) -> str:
     """
     Generate a comprehensive research report.
@@ -1618,6 +1741,16 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     ]
 
     topic_lower = topic.lower()
+    is_recipe_query = any(kw in topic_lower for kw in [
+        "recipe", "cook", "cooking", "bake", "baking", "dish", "food",
+        "bhature", "bhatura", "chole", "chhole", "biryani", "curry",
+        "cake", "bread", "soup", "salad", "pasta", "pizza", "dessert",
+        "make at home", "homemade", "ingredients", "paneer", "dal",
+        "chapati", "roti", "naan", "dosa", "samosa", "pulao", "kheer",
+        "gulab jamun", "halwa", "pakora", "paratha", "tikka", "tandoori",
+        "masala", "chutney", "raita", "lassi", "smoothie", "sandwich",
+        "burger", "fry", "roast", "grill", "stew", "broth",
+    ])
     is_travel_query = any(kw in topic_lower for kw in [
         "visit", "place", "destination", "travel", "tour", "vacation", "trip", "attraction",
         "scotland", "scottland", "india", "japan", "europe", "paris", "london", "italy"
@@ -1629,6 +1762,21 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     if len(custom_subtopics) >= 3:
         question_type = "multi-part research request"
         topic_list = custom_subtopics[:report_profile["sections"]]
+    elif is_recipe_query:
+        question_type = "recipe or cooking request"
+        # Extract the dish name from the query for use in headings
+        dish_name = re.sub(
+            r'\b(give|me|the|a|an|recipe|of|for|how|to|make|cook|prepare|at|home|homemade|please|tell|show)\b',
+            ' ', topic, flags=re.IGNORECASE
+        )
+        dish_name = re.sub(r'\s+', ' ', dish_name).strip(' .:-').title() or topic.title()
+        topic_list = [
+            f"Complete ingredient list with exact quantities for {dish_name}",
+            f"Step-by-step preparation and cooking instructions for {dish_name}",
+            "Pro tips, variations, and common mistakes to avoid",
+            "Serving suggestions and accompaniments",
+            "Nutritional highlights and storage tips",
+        ][:report_profile["sections"]]
     elif is_comparison_query:
         question_type = "comparison and decision request"
         topic_list = [
@@ -1697,12 +1845,16 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         "Write with precision, intellectual honesty, and a professional but readable tone.\n\n"
         "Start every response with a section titled `## Understanding the Question`. Explain the user's intent, "
         "question type, key terms, assumptions, and the information required for a useful answer.\n\n"
-        "After that first section, design the answer around the request instead of forcing a universal report format:\n"
+        "After that first section, design the answer around the request instead of applying a fixed template:\n"
         "- For a comparison, use decision criteria, side-by-side evidence, trade-offs, and a recommendation.\n"
         "- For a how-to request, use prerequisites, sequenced actions, safeguards, and validation criteria.\n"
         "- For travel planning, use destinations, practical planning, timing, and itinerary choices.\n"
         "- For an explanatory request, use concepts, mechanisms, examples, and implications.\n"
-        "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n\n"
+        "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n"
+        "- For a recipe or cooking request, present the dish name as heading, then a complete ingredient list "
+        "with exact quantities and measurements, followed by clear numbered step-by-step cooking instructions, "
+        "pro tips, common mistakes to avoid, variations, and serving suggestions. Write it like a real cookbook — "
+        "warm, practical, and easy to follow. Do NOT format a recipe as a corporate research report.\n\n"
         "Use only headings that improve the specific answer. Give a direct answer early, then provide the level "
         "of detail the question needs. Include a conclusion, recommendations, limitations, or source list only "
         "when they help answer the request; do not add empty sections.\n\n"
@@ -1814,6 +1966,12 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             "## Answer by Requested Topic",
             "The strongest next step is to validate the findings most relevant to each requested topic before combining them into one decision.",
         ),
+        "recipe or cooking request": (
+            "This is a recipe/cooking request. The user wants a complete, practical recipe with exact ingredients, "
+            "quantities, and clear step-by-step cooking instructions they can follow in the kitchen.",
+            "## Complete Recipe",
+            "Enjoy your meal! Adjust spices and quantities to your taste. Practice makes perfect — each attempt will get better.",
+        ),
         "comparison and decision request": (
             "This is a comparison question. A useful answer needs explicit decision criteria, evidence for each "
             "alternative, and trade-offs that change the recommendation for different use cases.",
@@ -1847,6 +2005,11 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     }
     question_analysis, answer_heading, bottom_line = response_shapes[question_type]
 
+    # ── Build recipe-style output for cooking queries ────────────────────────
+    if question_type == "recipe or cooking request":
+        return _build_recipe_fallback_output(topic, source_records, question_analysis, bottom_line)
+
+    # ── Build standard research-style output for all other queries ──────────
     topic_sections = []
     for index, research_lens in enumerate(topic_list, 1):
         start = (index - 1) * 2
