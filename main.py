@@ -178,7 +178,6 @@ async def start_research(request: ResearchRequest):
     if request.depth not in ("quick", "detailed", "deep"):
         raise HTTPException(status_code=400, detail="Depth must be 'quick', 'detailed', or 'deep'")
 
-
     # Generate task ID
     task_id = str(uuid.uuid4())[:12]
 
@@ -224,7 +223,8 @@ async def start_research(request: ResearchRequest):
         crew.activity_log.add("Report Writer", "completed task", "Report compiled successfully.")
         return report_text
 
-    def _run():
+    def _run_and_persist():
+        """Execute the research pipeline and persist results to DB."""
         started_at = time.time()
         crew.status = "running"
         crew.start_time = datetime.now()
@@ -295,17 +295,31 @@ async def start_research(request: ResearchRequest):
                 activity_log=crew.activity_log.get_all(),
             )
 
-    thread = threading.Thread(target=_run, daemon=True)
-    thread.start()
-
-    return ResearchResponse(
-        task_id=task_id,
-        status="running",
-        topic=topic,
-        depth=request.depth,
-        message="Research started. Use the stream endpoint to follow agent activity.",
-        timestamp=datetime.now().isoformat(),
-    )
+    # ── Vercel vs Local execution strategy ────────────────────────────────
+    # On Vercel serverless: run SYNCHRONOUSLY so the result is saved to the DB
+    # before the response is sent. Background threads die between requests on Vercel.
+    # Locally: run in a background thread for non-blocking SSE streaming.
+    if IS_VERCEL:
+        _run_and_persist()
+        return ResearchResponse(
+            task_id=task_id,
+            status="completed",
+            topic=topic,
+            depth=request.depth,
+            message="Research completed. Fetch the result now.",
+            timestamp=datetime.now().isoformat(),
+        )
+    else:
+        thread = threading.Thread(target=_run_and_persist, daemon=True)
+        thread.start()
+        return ResearchResponse(
+            task_id=task_id,
+            status="running",
+            topic=topic,
+            depth=request.depth,
+            message="Research started. Use the stream endpoint to follow agent activity.",
+            timestamp=datetime.now().isoformat(),
+        )
 
 
 @app.get("/api/research/{task_id}/stream")

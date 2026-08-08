@@ -158,10 +158,25 @@ const App = (() => {
 
             AgentsPanel.show();
             ReportViewer.hideReport();
-            setSystemStatus('running', `Researching: ${truncate(topic, 44)}`);
-            showToast('Research crew launched.', 'success');
-            connectSSE(currentTaskId);
-            loadHistory();
+
+            // On Vercel serverless, the POST returns status='completed' immediately
+            // because the research ran synchronously. Skip SSE and fetch result directly.
+            if (data.status === 'completed') {
+                showToast('Research crew launched.', 'success');
+                setSystemStatus('running', `Researching: ${truncate(topic, 44)}`);
+                AgentsPanel.markAllCompleted();
+                await fetchAndShowResult(currentTaskId);
+                setSystemStatus('idle', 'Research completed');
+                showToast('Report is ready.', 'success');
+                setLoadingState(false);
+                loadHistory();
+                refreshHealth();
+            } else {
+                setSystemStatus('running', `Researching: ${truncate(topic, 44)}`);
+                showToast('Research crew launched.', 'success');
+                connectSSE(currentTaskId);
+                loadHistory();
+            }
         } catch (error) {
             showToast(`Failed to start research: ${error.message}`, 'error');
             setSystemStatus('error', 'Research failed to start');
