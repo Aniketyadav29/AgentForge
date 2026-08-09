@@ -1746,6 +1746,25 @@ def _evaluate_simple_math_expr(expr_str: str):
         return None, []
 
 
+def _clean_truncate(text: str, max_len: int = 250) -> str:
+    """Cleanly truncate text without cutting words in half or ending abruptly."""
+    if not text:
+        return ""
+    text = text.strip().replace("\n", " ").replace("|", "-")
+    if len(text) <= max_len:
+        return text
+
+    truncated = text[:max_len]
+    last_punct = max(truncated.rfind('. '), truncated.rfind('! '), truncated.rfind('? '))
+    if last_punct > max_len // 2:
+        return truncated[:last_punct + 1]
+
+    last_space = truncated.rfind(' ')
+    if last_space > 0:
+        return truncated[:last_space] + "..."
+    return truncated + "..."
+
+
 def _build_resources_section(topic: str, clean_topic: str, source_records: list, question_type: str) -> str:
     """Build a comprehensive resources section with Webpages, Websites, and YouTube video links."""
     import urllib.parse
@@ -1792,9 +1811,11 @@ def _build_resources_section(topic: str, clean_topic: str, source_records: list,
             snippet = s.get("snippet", "").strip()
             domain = link.split("/")[2] if "://" in link else "web source"
             if link:
-                resources_md += f"{idx}. [{title}]({link}) — *{domain}*\n"
-                if snippet:
-                    resources_md += f"   > *\"{snippet[:120]}...\"*\n"
+                clean_title = _clean_truncate(title, 90)
+                clean_snip = _clean_truncate(snippet, 220)
+                resources_md += f"{idx}. [{clean_title}]({link}) — *{domain}*\n"
+                if clean_snip:
+                    resources_md += f"   > *\"{clean_snip}\"*\n"
             else:
                 resources_md += f"{idx}. **{title}**\n"
 
@@ -2654,12 +2675,14 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     if source_records:
         source_rows = []
         for source in source_records:
-            title = source["title"].replace("|", "-")
-            snippet = source["snippet"].replace("|", "-")
+            title = source["title"]
+            snippet = source["snippet"]
             link = source["link"]
             domain = link.split("/")[2] if "://" in link else "web source"
+            clean_title = _clean_truncate(title, 80)
+            clean_snippet = _clean_truncate(snippet, 220)
             source_rows.append(
-                f"| {source['index']} | **{title[:70]}** | {snippet[:120]} | [{domain}]({link}) |"
+                f"| {source['index']} | **{clean_title}** | {clean_snippet} | [{domain}]({link}) |"
             )
         sources_table = (
             "| # | Title | Retrieved evidence | Source |\n"
