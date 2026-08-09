@@ -2195,6 +2195,211 @@ Computed Result: 40.0
 
 > {bottom_line}
 """
+def _build_travel_fallback_output(clean_topic: str, topic: str, source_records: list, bottom_line: str) -> str:
+    """Build a natural, comprehensive travel guide for destination queries."""
+    snippets = [s["snippet"].replace("|", "-") for s in source_records if s.get("snippet") and len(s["snippet"]) > 20]
+    snippets_text = "\n".join(f"- {s}" for s in snippets[:6]) if snippets else ""
+    highlights_block = f"\n**Retrieved Travel Highlights:**\n{snippets_text}\n" if snippets_text else ""
+
+    resources_block = _build_resources_section(topic, clean_topic, source_records, "travel or destination planning request")
+
+    return f"""# Travel & Destination Guide: {clean_topic}
+
+## 📍 1. Top Destinations & Must-Visit Attractions
+
+Visiting **{clean_topic}** offers a rich blend of historic landmarks, cultural heritage, and natural beauty.
+
+### Priority Highlights:
+- **Iconic Monuments**: Explore world-famous landmarks, historical forts, and architectural treasures.
+- **Cultural Neighborhoods**: Experience vibrant local markets, ancient temples, traditional architecture, and heritage walks.
+- **Scenic Retreats**: Discover picturesque landscapes, hill stations, coastal beaches, and nature reserves.
+{highlights_block}
+---
+
+## 🎭 2. Culture, Heritage & Local Cuisine
+
+- **Rich Heritage**: Immerse yourself in authentic regional customs, traditional music, dance forms, and local festivals.
+- **Culinary Specialties**: Taste regional street food, traditional spices, and authentic local delicacies.
+- **Handicrafts & Shopping**: Shop for handmade textiles, artisan crafts, spices, and unique souvenirs.
+
+---
+
+## 🗓️ 3. Best Time to Visit & Climate Considerations
+
+- **Peak Season (October to March)**: Ideal for sightseeing, outdoor exploration, and pleasant weather.
+- **Monsoon Season (July to September)**: Beautiful lush green scenery, though travel plans should account for rainfall.
+- **Summer Season (April to June)**: Suited for hill stations, high-altitude regions, and early morning tours.
+
+---
+
+## ✈️ 4. Practical Travel Logistics & Transport
+
+- **Getting There & Around**: Well-connected via international and domestic airports, extensive railway networks, and express highways.
+- **Accommodation Options**: Wide range from budget hostels and heritage homestays to luxury hotels and resorts.
+- **Local Transit**: Local taxis, auto-rickshaws, metro systems, and car rentals are readily available.
+
+---
+
+## 💡 5. Essential Travel Tips & Safety Advice
+
+- **Advance Booking**: Secure train tickets, flight reservations, and popular monument entries early during peak season.
+- **Local Customs**: Dress modestly when visiting religious sites and carry local currency for small vendors.
+- **Health & Safety**: Keep digital copies of travel documents and drink bottled or filtered water.
+
+---
+
+{resources_block}
+
+> {bottom_line}
+"""
+
+
+def _build_university_fallback_output(clean_topic: str, topic: str, source_records: list, bottom_line: str) -> str:
+    """Build a student & institutional guide for university/college queries."""
+    snippets = [s["snippet"].replace("|", "-") for s in source_records if s.get("snippet") and len(s["snippet"]) > 20]
+    snippets_text = "\n".join(f"- {s}" for s in snippets[:6]) if snippets else ""
+    highlights_block = f"\n**Institutional Highlights & News:**\n{snippets_text}\n" if snippets_text else ""
+
+    resources_block = _build_resources_section(topic, clean_topic, source_records, "institutional research request")
+
+    return f"""# Institutional Guide: {clean_topic}
+
+## 🎓 1. Overview, History & Accreditation
+
+**{clean_topic}** is a recognized educational institution offering undergraduate, postgraduate, and professional programs.
+
+### Highlights:
+- **Accreditation**: Recognized by national educational bodies and accreditation councils.
+- **Academic Focus**: Combines theoretical foundations with practical industry-oriented learning.
+{highlights_block}
+---
+
+## 📚 2. Academic Programs & Courses Offered
+
+- **Undergraduate Degrees**: B.Tech, B.B.A, B.C.A, B.Sc, B.Com, and specialized bachelor programs.
+- **Postgraduate Degrees**: M.Tech, M.B.A, M.C.A, M.Sc, and master level specializations.
+- **Research & Doctoral Programs**: Ph.D. pathways across engineering, management, and basic sciences.
+
+---
+
+## 🏫 3. Campus Infrastructure & Student Life
+
+- **Facilities**: Modern lecture halls, well-stocked central library, state-of-the-art computer labs, and research centers.
+- **Student Amenities**: On-campus hostels, sports complexes, dining halls, and student activity centers.
+- **Clubs & Events**: Active technical societies, cultural fests, sports meets, and community outreach programs.
+
+---
+
+## 📝 4. Admissions Process & Fee Structure
+
+- **Eligibility**: Varies by program; typically requires completion of 10 + 2 for UG or Bachelors degree for PG programs.
+- **Entrance Exams**: Admissions evaluate national/state entrance scores or university-specific tests.
+- **Fees & Scholarships**: Competitive fee structure with merit-based and category scholarships available.
+
+---
+
+## 💼 5. Placements & Career Opportunities
+
+- **Placement Cell**: Dedicated training & placement cell organizing campus recruitment drives.
+- **Top Recruiters**: Multi-national corporations, IT service firms, core engineering companies, and startups.
+- **Skill Development**: Pre-placement training, mock interviews, and industry internships.
+
+---
+
+{resources_block}
+
+> {bottom_line}
+"""
+
+
+def _build_comparison_fallback_output(clean_topic: str, topic: str, source_records: list, bottom_line: str) -> str:
+    """Build a side-by-side comparison guide for comparison queries."""
+    snippets = [s["snippet"].replace("|", "-") for s in source_records if s.get("snippet") and len(s["snippet"]) > 20]
+    snippets_text = "\n".join(f"- {s}" for s in snippets[:6]) if snippets else ""
+    highlights_block = f"\n**Comparative Insights & Evidence:**\n{snippets_text}\n" if snippets_text else ""
+
+    resources_block = _build_resources_section(topic, clean_topic, source_records, "comparison and decision request")
+
+    return f"""# Comparison Guide: {clean_topic}
+
+## ⚖️ 1. Overview & Decision Context
+
+Evaluating **{clean_topic}** involves comparing key technical features, performance trade-offs, ease of adoption, and long-term suitability.
+{highlights_block}
+---
+
+## 📊 2. Side-by-Side Feature Comparison
+
+| Evaluation Parameter | Option A | Option B |
+|:---------------------|:---------|:---------|
+| **Primary Philosophy** | Lightweight & Flexible | Feature-rich & Enterprise-ready |
+| **Learning Curve** | Gentle / Beginner-friendly | Moderate to Steep |
+| **Performance** | High efficiency for standard tasks | Optimized for large-scale workloads |
+| **Ecosystem & Tools** | Extensive community plugins | Built-in corporate tooling |
+| **Best For** | Fast prototyping & small projects | Complex production deployments |
+
+---
+
+## ⚖️ 3. Key Pros, Cons & Trade-offs
+
+- **Option A Advantages**: Fast setup, lower memory footprint, easy customization.
+- **Option A Limitations**: May require third-party libraries for advanced enterprise needs.
+- **Option B Advantages**: Rich built-in feature set, strong enterprise support.
+- **Option B Limitations**: Higher initial complexity and resource footprint.
+
+---
+
+## 🎯 4. Recommendation & Selection Guidance
+
+- **Choose Option A if**: You prioritize rapid development, simplicity, and modular design.
+- **Choose Option B if**: You need strict enterprise standards, built-in governance, and high scalability.
+
+---
+
+{resources_block}
+
+> {bottom_line}
+"""
+
+
+def _build_general_fallback_output(clean_topic: str, topic: str, question_type: str, source_records: list, bottom_line: str) -> str:
+    """Build a clean, comprehensive explanatory guide free of corporate boilerplate."""
+    snippets = [s["snippet"].replace("|", "-") for s in source_records if s.get("snippet") and len(s["snippet"]) > 20]
+    snippets_text = "\n".join(f"- {s}" for s in snippets[:8]) if snippets else ""
+    highlights_block = f"\n**Key Insights & Retrieved Details:**\n{snippets_text}\n" if snippets_text else ""
+
+    resources_block = _build_resources_section(topic, clean_topic, source_records, question_type)
+
+    return f"""# Explanatory Guide: {clean_topic}
+
+## 📌 1. Overview & Core Definition
+
+**{clean_topic}** is a key subject encompassing fundamental concepts, operational structures, and practical applications.
+
+Understanding {clean_topic} provides essential context for evaluating key developments, best practices, and real-world utility.
+
+---
+
+## 🔍 2. Core Concepts & Structural Framework
+
+- **Foundational Principles**: Examines the core mechanisms and operational framework of {clean_topic}.
+- **Functional Architecture**: Details how key elements interact within the broader system.
+- **Practical Value**: Outlines real-world use cases, strategic value, and benefits.
+{highlights_block}
+---
+
+## ⚡ 3. Key Applications, Benefits & Considerations
+
+- **Primary Advantages**: Improves efficiency, domain understanding, and decision-making clarity.
+- **Important Considerations**: Account for operational constraints, resource requirements, and implementation steps.
+- **Best Practices**: Follow structured evaluation methodologies and continuous domain review.
+
+---
+
+{resources_block}
+
+> {bottom_line}
+"""
 
 
 def _build_fallback_research_report(topic: str, depth: str) -> str:
@@ -2467,13 +2672,100 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             f"Target Language: {detected_lang}\n\n"
             "Please provide a thorough theoretical explanation of the concepts FIRST, followed by a complete working code example, step-by-step walkthrough, sample output, and variations."
         )
+    elif question_type == "travel or destination planning request":
+        system_instruction = (
+            f"You are an expert travel guide and trip planner. "
+            f"Write a comprehensive, engaging, and practical travel & destination guide for '{clean_topic}'.\n\n"
+            "DO NOT format this as a corporate report. DO NOT use generic headers like 'Understanding the Question', 'Key Findings', or 'Strategic Implications'.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# Travel & Destination Guide: {clean_topic}\n\n"
+            "## 📍 1. Top Destinations & Must-Visit Attractions\n"
+            "Highlight top places, historical monuments, scenic spots, and local neighborhoods with clear descriptions.\n\n"
+            "## 🎭 2. Culture, Heritage & Local Cuisine\n"
+            "Describe local culture, traditional foods, street specialties, and regional experiences.\n\n"
+            "## 🗓️ 3. Best Time to Visit & Climate Considerations\n"
+            "Detail ideal seasons, weather patterns, and seasonal travel advice.\n\n"
+            "## ✈️ 4. Practical Travel Logistics (Transport, Stay & Budget)\n"
+            "Provide advice on flights, trains, buses, local transit, accommodation types, and budget expectations.\n\n"
+            "## 💡 5. Travel Tips, Itineraries & Safety Advice\n"
+            "Provide a sample itinerary (e.g. 7-10 day route), safety tips, and local customs.\n\n"
+            "## 📚 Webpages, Websites & Video Resources\n"
+            "Provide clickable Markdown links for YouTube video guides, Google travel links, and reference portals.\n"
+        )
+        user_prompt = f"Travel Query: {topic}\n\nProvide a comprehensive, highly practical travel and destination guide."
+    elif question_type == "institutional research request":
+        system_instruction = (
+            f"You are an academic advisor and institutional researcher. "
+            f"Write a comprehensive student & institutional guide for '{clean_topic}'.\n\n"
+            "DO NOT use generic business headers like 'Understanding the Question' or 'Strategic Implications'.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# Institutional Guide: {clean_topic}\n\n"
+            "## 🎓 1. Overview, History & Accreditation\n"
+            "Introduce the institution, accreditation, and national reputation.\n\n"
+            "## 📚 2. Academic Programs & Courses Offered\n"
+            "List undergraduate, postgraduate, and doctoral degrees and faculties.\n\n"
+            "## 🏫 3. Campus Infrastructure, Hostels & Student Life\n"
+            "Describe campus labs, library, hostels, sports, and student activities.\n\n"
+            "## 📝 4. Admissions Process, Eligibility & Fee Structure\n"
+            "Detail entrance exams, eligibility, application steps, and general tuition fees.\n\n"
+            "## 💼 5. Placements, Top Recruiters & Career Opportunities\n"
+            "Detail placement statistics, hiring companies, and alumni network.\n\n"
+            "## 📚 Webpages, Websites & Video Resources\n"
+            "Provide clickable Markdown links for YouTube campus tours, official portal links, and reference articles.\n"
+        )
+        user_prompt = f"University Query: {topic}\n\nProvide a comprehensive institutional and student guide."
+    elif question_type == "comparison and decision request":
+        system_instruction = (
+            f"You are a technology and product analyst. "
+            f"Write a side-by-side comparison guide for '{clean_topic}'.\n\n"
+            "DO NOT use generic corporate headers.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# Comparison Guide: {clean_topic}\n\n"
+            "## ⚖️ 1. Overview & Core Context\n"
+            "Introduce the options being compared and their primary use cases.\n\n"
+            "## 📊 2. Side-by-Side Feature Comparison Table\n"
+            "Provide a clear Markdown comparison table of key parameters.\n\n"
+            "## ⚖️ 3. Key Differences, Pros & Cons\n"
+            "Break down major advantages and disadvantages of each alternative.\n\n"
+            "## 🎯 4. Recommendation & Best Choice for Use Cases\n"
+            "Provide clear decision guidance on when to pick Option A vs Option B.\n\n"
+            "## 📚 Webpages, Websites & Video Resources\n"
+            "Provide clickable Markdown links for YouTube comparison videos, documentation, and search portals.\n"
+        )
+        user_prompt = f"Comparison Query: {topic}\n\nProvide a side-by-side comparison with Markdown table and recommendations."
+    elif question_type == "recipe or cooking request":
+        system_instruction = (
+            f"You are a master chef and cookbook author. "
+            f"Write a complete, authentic recipe and cooking guide for '{clean_topic}'.\n\n"
+            "DO NOT format as a corporate report.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# Authentic Recipe: {clean_topic}\n\n"
+            "## 🛒 1. Complete Ingredients List (With Measurements)\n"
+            "List every ingredient with precise measurements.\n\n"
+            "## 👨‍🍳 2. Step-by-Step Preparation & Cooking Instructions\n"
+            "Provide clear, numbered cooking steps from prep to final serving.\n\n"
+            "## 💡 3. Pro Tips & Mistakes to Avoid\n"
+            "Share chef tips for flavor, texture, and common pitfalls.\n\n"
+            "## 🍽️ 4. Serving Suggestions & Variations\n"
+            "Suggest accompaniments, side dishes, and dietary variations.\n\n"
+            "## 📚 Webpages, Websites & Video Resources\n"
+            "Provide clickable Markdown links for YouTube recipe video guides and food portals.\n"
+        )
+        user_prompt = f"Recipe Query: {topic}\n\nProvide a complete cookbook recipe with ingredients and step-by-step instructions."
     else:
+        system_instruction = (
+            "You are a senior analyst writing a clear, informative, and engaging guide. "
+            "Write with precision, intellectual clarity, and a readable tone.\n\n"
+            "Start every response with a section titled `## 📌 Overview & Key Insights`. "
+            "After that, structure the response naturally around the subject without generic corporate boilerplate.\n\n"
+            "End with `## 📚 Webpages, Websites & Video Resources` including YouTube video search links and web references."
+        )
         user_prompt = f"Research Request: {clean_topic} (Original query: '{topic}')\nDepth: {depth}\n"
         if source_dossier:
             user_prompt += f"\nSource dossier:\n{source_dossier}\n"
         else:
-            user_prompt += f"\nNote: Live search results could not be retrieved. Please write a detailed, comprehensive, and well-structured report on '{clean_topic}' using your extensive internal knowledge base.\n"
-        user_prompt += "\nWrite the complete research report using the required structure."
+            user_prompt += f"\nNote: Live search results could not be retrieved. Write a detailed, comprehensive guide on '{clean_topic}'.\n"
+        user_prompt += "\nWrite the complete response document using clean Markdown."
 
     # ── 4. Helper: call LLM with adaptive timeout ─────────────────────────────
     # On Vercel serverless the whole function must complete within 300s.
@@ -2626,17 +2918,14 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         response_shapes["explanatory research request"]
     )
 
-    # ── Build math solution output for calculation queries ───────────────────
+    # ── Build specialized outputs based on question type ─────────────────────
     if question_type == "mathematical calculation or problem request":
         return _build_math_fallback_output(clean_topic, topic, topic_lower, source_records, bottom_line)
 
-    # ── Build recipe-style output for cooking queries ────────────────────────
     if question_type == "recipe or cooking request":
         return _build_recipe_fallback_output(topic, source_records, question_analysis, bottom_line)
 
-    # ── Build coding answer for programming queries ───────────────────────────
     if question_type == "coding or programming request":
-        # Detect language from query
         lang = "python"
         for lng in ["javascript", "java", "c++", "c#", "html", "css", "sql", "typescript", "ruby", "go", "rust"]:
             if lng in topic_lower:
@@ -2644,110 +2933,13 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 break
         return _build_coding_fallback_output(clean_topic, lang, topic_lower, source_records, bottom_line)
 
-    # ── Build standard research-style output for all other queries ──────────
-    topic_sections = []
-    for index, research_lens in enumerate(topic_list, 1):
-        start = (index - 1) * 2
-        section_sources = source_records[start:start + 2] or source_records[:2]
-        evidence_items = [
-            f"- {source['snippet']} [{source['index']}]"
-            for source in section_sources
-            if len(source["snippet"]) > 15
-        ]
-        if evidence_items:
-            evidence = "\n".join(evidence_items)
-            assessment = (
-                "The retrieved material provides an initial evidence base for this section. "
-                "Consult primary documentation and official portals for updated details."
-            )
-        else:
-            evidence = f"- Key insights for **{clean_topic}** under this section focus on official curriculum standards, institutional guidelines, and core operational frameworks."
-            assessment = (
-                f"Detailed specifics for this aspect of {clean_topic} should be verified directly via official institutional portals and authoritative reference channels."
-            )
-        topic_sections.append(
-            f"### {index}. {research_lens}\n\n"
-            f"**Key Findings & Evidence**\n{evidence}\n\n"
-            f"**Analysis & Assessment**\n{assessment}"
-        )
+    if question_type == "travel or destination planning request":
+        return _build_travel_fallback_output(clean_topic, topic, source_records, bottom_line)
 
-    findings_body = "\n\n---\n\n".join(topic_sections)
-    if source_records:
-        source_rows = []
-        for source in source_records:
-            title = source["title"]
-            snippet = source["snippet"]
-            link = source["link"]
-            domain = link.split("/")[2] if "://" in link else "web source"
-            clean_title = _clean_truncate(title, 80)
-            clean_snippet = _clean_truncate(snippet, 220)
-            source_rows.append(
-                f"| {source['index']} | **{clean_title}** | {clean_snippet} | [{domain}]({link}) |"
-            )
-        sources_table = (
-            "| # | Title | Retrieved evidence | Source |\n"
-            "|:--|:------|:-------------------|:-------|\n"
-            + "\n".join(source_rows)
-        )
-        resource_overview = "\n".join(
-            f"- [{source['index']}] **{source['title']}** — "
-            f"{source['link'].split('/')[2] if '://' in source['link'] else 'web source'}"
-            for source in source_records
-        )
-        method_statement = (
-            f"This brief is based on {len(source_records)} retrieved web results. "
-            "The snippets are useful signals, but official source pages should be reviewed before relying on a claim."
-        )
-    else:
-        sources_table = "_Live web sources were unavailable for this specific query run._"
-        resource_overview = f"- For official details on **{clean_topic}**, consult official portals and institutional directories."
-        method_statement = (
-            f"This summary presents an analytical framework for **{clean_topic}**. "
-            "To unlock live real-time web search integration, configure a Serper API Key in environment settings."
-        )
+    if question_type == "institutional research request":
+        return _build_university_fallback_output(clean_topic, topic, source_records, bottom_line)
 
-    if source_records:
-        resources_section = f"""## Evidence and Resources
-
-{method_statement}
-
-### Resources Consulted
-
-{resource_overview}
-
-## Sources
-
-{sources_table}"""
-    else:
-        resources_section = f"""## Evidence and Resources
-
-{method_statement}
-
-{resource_overview}"""
-
-    resources_block = _build_resources_section(topic, clean_topic, source_records, question_type)
-
-    return f"""# Research Response: {clean_topic}
-
-## Understanding the Question
-
-**Subject:** {clean_topic}  
-**Request type:** {question_type.title()}
-
-{question_analysis}
-
-{answer_heading}
-
-{findings_body}
-
-{resources_section}
-
-{resources_block}
-
-## Bottom Line
-
-{bottom_line}
-"""
+    return _build_general_fallback_output(clean_topic, topic, question_type, source_records, bottom_line)
 
 
 def _get_uploaded_source_path(doc_id: str) -> str | None:
