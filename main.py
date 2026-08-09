@@ -1705,6 +1705,123 @@ The following sources were consulted for this recipe:
 *For the most detailed ingredient quantities and step-by-step photos, we recommend visiting the source links above.*
 """
 
+def _evaluate_simple_math_expr(expr_str: str):
+    """
+    Safely evaluate simple arithmetic expressions containing +, -, *, /, ^, %, ()
+    and return (final_answer, step_by_step_explanation).
+    """
+    import re
+    clean_expr = re.sub(r'[^0-9\+\-\*\/\^\%\(\)\.\s]', '', expr_str).strip()
+    if not clean_expr or not any(c.isdigit() for c in clean_expr):
+        return None, []
+
+    eval_expr = clean_expr.replace('^', '**')
+    try:
+        import ast
+        node = ast.parse(eval_expr, mode='eval')
+        def _check_node(n):
+            if isinstance(n, (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Num)):
+                for child in ast.iter_child_nodes(n):
+                    _check_node(child)
+            else:
+                raise ValueError("Unsafe node")
+        _check_node(node)
+
+        val = eval(compile(node, '<string>', 'eval'), {"__builtins__": {}}, {})
+        if isinstance(val, float) and val.is_integer():
+            val = int(val)
+        elif isinstance(val, float):
+            val = round(val, 4)
+
+        steps = []
+        steps.append(f"Original Expression: `{clean_expr}`")
+        if '*' in clean_expr or '/' in clean_expr:
+            steps.append("1. **Order of Operations (BODMAS / PEMDAS)**: Perform Multiplication and Division from left to right.")
+        if '+' in clean_expr or '-' in clean_expr:
+            steps.append("2. Perform Addition and Subtraction from left to right.")
+        steps.append(f"3. Final Computed Result: **`{val}`**")
+
+        return val, steps
+    except Exception:
+        return None, []
+
+
+def _build_math_fallback_output(clean_topic: str, topic: str, topic_lower: str, source_records: list, bottom_line: str) -> str:
+    """Build a math-first solution with final answer, steps, practice example, and learning resources."""
+    import re
+    val, calc_steps = _evaluate_simple_math_expr(topic)
+
+    expr_text = re.sub(r'[^0-9\+\-\*\/\^\%\(\)\.\s]', '', topic).strip() or clean_topic
+
+    if val is not None:
+        final_ans_str = f"**Answer: {val}**"
+        step_details = "\n".join(f"- {st}" for st in calc_steps)
+    else:
+        final_ans_str = f"**Problem Statement: {clean_topic}**"
+        step_details = f"- Apply BODMAS/PEMDAS order of operations (Brackets, Orders, Division/Multiplication, Addition/Subtraction).\n- Perform calculations left-to-right following priority rules."
+
+    if val is not None and isinstance(val, (int, float)):
+        sample_expr = "6 * 3 - 4 + 5"
+        sample_ans = 19
+        sample_steps = "1. Multiply first: $6 \\times 3 = 18$\n2. Subtract next: $18 - 4 = 14$\n3. Add finally: $14 + 5 = 19$"
+    else:
+        sample_expr = "12 / 3 + 4 * 2"
+        sample_ans = 12
+        sample_steps = "1. Divide & Multiply: $12 / 3 = 4$ and $4 \\times 2 = 8$\n2. Add results: $4 + 8 = 12$"
+
+    resource_items = []
+    if source_records:
+        for idx, s in enumerate(source_records[:5], 1):
+            link = s.get("link", "")
+            title = s.get("title", f"Math Resource {idx}")
+            domain = link.split("/")[2] if "://" in link else "web resource"
+            resource_items.append(f"{idx}. [{title}]({link}) — *{domain}*")
+    resources_list = "\n".join(resource_items) if resource_items else (
+        "- [Khan Academy — Order of Operations (BODMAS/PEMDAS)](https://www.khanacademy.org)\n"
+        "- [MathIsFun — Order of Operations](https://www.mathsisfun.com)\n"
+        "- [YouTube — Order of Operations Step-by-Step Examples](https://www.youtube.com)"
+    )
+
+    return f"""# Math Solution: {clean_topic}
+
+## 🎯 Final Answer
+
+### {final_ans_str}
+
+---
+
+## 📝 Step-by-Step Solution
+
+{step_details}
+
+### BODMAS / PEMDAS Rule Breakdown:
+- **B / P**: Brackets / Parentheses first
+- **O / E**: Orders / Exponents (powers, square roots)
+- **D / M**: Division and Multiplication (from left to right)
+- **A / S**: Addition and Subtraction (from left to right)
+
+---
+
+## 💡 Similar Practice Example
+
+**Problem**: Solve `{sample_expr}`
+
+**Step-by-Step Solution**:
+{sample_steps}
+
+**Practice Answer**: **`{sample_ans}`**
+
+---
+
+## 📚 Educational Resources & Learning References
+
+Below are curated educational resources, tutorial links, and reference pages for order of operations and mathematical problem solving:
+
+{resources_list}
+
+> {bottom_line}
+"""
+
 def _build_coding_fallback_output(clean_topic: str, lang: str, topic_lower: str, source_records: list, bottom_line: str) -> str:
     """
     Build a theory-first, comprehensive technical answer for fallback mode.
@@ -2100,9 +2217,13 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         "visit", "place", "destination", "travel", "tour", "vacation", "trip", "attraction",
         "scotland", "scottland", "india", "japan", "europe", "paris", "london", "italy"
     ])
-    is_comparison_query = any(term in topic_lower for term in [" vs ", "versus", "compare", "difference between", "better than"])
-    is_how_to_query = topic_lower.startswith("how ") or any(term in topic_lower for term in ["how to", "steps to", "implementation", "strategy for"])
-    is_current_query = any(term in topic_lower for term in ["latest", "current", "today", "recent", "2026", "trend", "outlook"])
+    has_math_ops = bool(re.search(r'[\d\)\xdf\xaa\xb2\xb3]\s*[\+\-\*\/\^\%\=]\s*[\d\(\xdf\xaa\xb2\xb3]', topic)) or bool(re.search(r'\d+\s*[\+\-\*\/\^\%]\s*\d+', topic))
+    is_math_query = has_math_ops or (any(kw in topic_lower for kw in [
+        "math", "solve", "calculate", "evaluation", "eval", "what is the answer of",
+        "what will the answer of", "answer of", "value of", "bodmas", "pemdas",
+        "arithmetic", "algebra", "equation", "derivative", "integral", "fraction",
+        "percentage", "square root", "sqrt", "logarithm", "trigonometry", "sin", "cos", "tan",
+    ]) and any(c.isdigit() or c in "+-*/^=%" for c in topic))
     is_coding_query = any(kw in topic_lower for kw in [
         "program", "code", "write a", "python", "javascript", "java", "c++", "c#",
         "html", "css", "sql", "function", "algorithm", "script", "syntax",
@@ -2118,6 +2239,14 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     if len(custom_subtopics) >= 3:
         question_type = "multi-part research request"
         topic_list = custom_subtopics[:report_profile["sections"]]
+    elif is_math_query:
+        question_type = "mathematical calculation or problem request"
+        topic_list = [
+            f"Final Answer and Step-by-Step Calculation for {clean_topic}",
+            "Order of Operations (BODMAS/PEMDAS) Explanation",
+            "Similar Practice Example and Solution",
+            "Educational Resources and Reference Links",
+        ][:report_profile["sections"]]
     elif is_coding_query:
         question_type = "coding or programming request"
         topic_list = [
@@ -2202,7 +2331,27 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     )
 
     # ── 3. Build evidence-led LLM prompts ────────────────────────────────────
-    if question_type == "coding or programming request":
+    if question_type == "mathematical calculation or problem request":
+        system_instruction = (
+            "You are an expert mathematics tutor and problem solver. "
+            "When answering mathematical expressions, arithmetic questions, or equations, you MUST ALWAYS provide the step-by-step calculation and final answer FIRST.\n\n"
+            "DO NOT format this as a business research report. DO NOT use generic business headers like 'Understanding the Question', 'Strategic Implications', or 'Current Landscape'.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# Math Solution: {clean_topic}\n\n"
+            "## 🎯 Final Answer\n"
+            "State the final numerical or algebraic answer clearly in a prominent block FIRST (e.g. **Answer: 21**).\n\n"
+            "## 📝 Step-by-Step Solution\n"
+            "Break down the calculation step-by-step using order of operations (BODMAS / PEMDAS) or algebraic rules. Explain each step clearly.\n\n"
+            "## 💡 Similar Practice Example\n"
+            "Provide one similar mathematical problem with its complete step-by-step solution so the user can practice and solidify their understanding.\n\n"
+            "## 📚 Educational Resources & Learning References\n"
+            "List relevant learning topics, online calculator references, and YouTube/educational search terms or references for further study.\n"
+        )
+        user_prompt = (
+            f"Math Problem: {topic}\n\n"
+            "Solve the expression step-by-step, state the final answer clearly FIRST, provide a similar practice example with solution, and list educational learning resources."
+        )
+    elif question_type == "coding or programming request":
         # Detect the programming language from the question
         detected_lang = "Python"
         lang_map = {
@@ -2386,6 +2535,11 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             "## Current Analysis",
             "Monitor upcoming developments as new evidence and official updates emerge.",
         ),
+        "mathematical calculation or problem request": (
+            f"This is a mathematical problem request for **{clean_topic}**. Below is the step-by-step solution, final answer, practice example, and learning resources.",
+            f"## Math Solution: {clean_topic}",
+            "Review the order of operations (BODMAS/PEMDAS) and practice similar problems to solidify your understanding.",
+        ),
         "explanatory research request": (
             f"This report provides a detailed breakdown of **{clean_topic}**, examining its core concepts, key structure, and practical significance.",
             f"## Overview and Key Analysis",
@@ -2396,6 +2550,10 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         question_type,
         response_shapes["explanatory research request"]
     )
+
+    # ── Build math solution output for calculation queries ───────────────────
+    if question_type == "mathematical calculation or problem request":
+        return _build_math_fallback_output(clean_topic, topic, topic_lower, source_records, bottom_line)
 
     # ── Build recipe-style output for cooking queries ────────────────────────
     if question_type == "recipe or cooking request":
