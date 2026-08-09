@@ -1746,6 +1746,61 @@ def _evaluate_simple_math_expr(expr_str: str):
         return None, []
 
 
+def _build_resources_section(topic: str, clean_topic: str, source_records: list, question_type: str) -> str:
+    """Build a comprehensive resources section with Webpages, Websites, and YouTube video links."""
+    import urllib.parse
+    encoded_topic = urllib.parse.quote(clean_topic or topic)
+
+    resources_md = "## 📚 Webpages, Websites & Video Resources\n\n"
+
+    # 1. YouTube Video Tutorials Section
+    youtube_url = f"https://www.youtube.com/results?search_query={encoded_topic}+tutorial"
+    yt_explanation_url = f"https://www.youtube.com/results?search_query={encoded_topic}+explained"
+    resources_md += "### ▶️ YouTube Video Tutorials\n"
+    resources_md += f"- 🎥 [Watch YouTube Video Tutorials on '{clean_topic}']({youtube_url})\n"
+    resources_md += f"- 🎬 [Watch Step-by-Step Video Explanations for '{clean_topic}']({yt_explanation_url})\n\n"
+
+    # 2. Web Search & Reference Portals Section
+    google_url = f"https://www.google.com/search?q={encoded_topic}"
+    resources_md += "### 🌐 Web & Reference Portals\n"
+    resources_md += f"- 🔍 [Search Google for Articles & Reference Websites on '{clean_topic}']({google_url})\n"
+
+    if question_type == "mathematical calculation or problem request":
+        wolfram_url = f"https://www.wolframalpha.com/input?i={encoded_topic}"
+        symbolab_url = f"https://www.symbolab.com/solver?query={encoded_topic}"
+        resources_md += f"- 🧮 [Solve & Verify on WolframAlpha Calculator]({wolfram_url})\n"
+        resources_md += f"- 📐 [Step-by-Step Solution on Symbolab Math Solver]({symbolab_url})\n"
+        resources_md += f"- 🎓 [Khan Academy — Mathematics & Problem Solving](https://www.khanacademy.org/math)\n"
+    elif question_type == "coding or programming request":
+        gfg_url = f"https://www.geeksforgeeks.org/search/?q={encoded_topic}"
+        w3_url = f"https://www.w3schools.com/googlesearch.php?q={encoded_topic}"
+        resources_md += f"- 💻 [GeeksforGeeks — {clean_topic} Tutorials & Code Patterns]({gfg_url})\n"
+        resources_md += f"- 📚 [W3Schools — {clean_topic} References & Examples]({w3_url})\n"
+        resources_md += f"- 📖 [Official Python Documentation](https://docs.python.org/3/)\n"
+    elif question_type == "recipe or cooking request":
+        resources_md += f"- 🍳 [AllRecipes — Video Guides & Community Cooking Tips](https://www.allrecipes.com/search?q={encoded_topic})\n"
+        resources_md += f"- 📖 [BBC Good Food — Verified Recipes & Preparation Steps](https://www.bbcgoodfood.com/search?q={encoded_topic})\n"
+
+    resources_md += "\n"
+
+    # 3. Live Web Search Sources (Retrieved Webpages)
+    if source_records:
+        resources_md += "### 🔗 Related Webpages & Retrieved Sources\n"
+        for idx, s in enumerate(source_records[:6], 1):
+            link = s.get("link", "")
+            title = s.get("title", f"Web Source {idx}")
+            snippet = s.get("snippet", "").strip()
+            domain = link.split("/")[2] if "://" in link else "web source"
+            if link:
+                resources_md += f"{idx}. [{title}]({link}) — *{domain}*\n"
+                if snippet:
+                    resources_md += f"   > *\"{snippet[:120]}...\"*\n"
+            else:
+                resources_md += f"{idx}. **{title}**\n"
+
+    return resources_md
+
+
 def _build_math_fallback_output(clean_topic: str, topic: str, topic_lower: str, source_records: list, bottom_line: str) -> str:
     """Build a math-first solution with final answer, steps, practice example, and learning resources."""
     import re
@@ -1769,18 +1824,7 @@ def _build_math_fallback_output(clean_topic: str, topic: str, topic_lower: str, 
         sample_ans = 12
         sample_steps = "1. Divide & Multiply: $12 / 3 = 4$ and $4 \\times 2 = 8$\n2. Add results: $4 + 8 = 12$"
 
-    resource_items = []
-    if source_records:
-        for idx, s in enumerate(source_records[:5], 1):
-            link = s.get("link", "")
-            title = s.get("title", f"Math Resource {idx}")
-            domain = link.split("/")[2] if "://" in link else "web resource"
-            resource_items.append(f"{idx}. [{title}]({link}) — *{domain}*")
-    resources_list = "\n".join(resource_items) if resource_items else (
-        "- [Khan Academy — Order of Operations (BODMAS/PEMDAS)](https://www.khanacademy.org)\n"
-        "- [MathIsFun — Order of Operations](https://www.mathsisfun.com)\n"
-        "- [YouTube — Order of Operations Step-by-Step Examples](https://www.youtube.com)"
-    )
+    resources_block = _build_resources_section(topic, clean_topic, source_records, "mathematical calculation or problem request")
 
     return f"""# Math Solution: {clean_topic}
 
@@ -1813,11 +1857,7 @@ def _build_math_fallback_output(clean_topic: str, topic: str, topic_lower: str, 
 
 ---
 
-## 📚 Educational Resources & Learning References
-
-Below are curated educational resources, tutorial links, and reference pages for order of operations and mathematical problem solving:
-
-{resources_list}
+{resources_block}
 
 > {bottom_line}
 """
@@ -1832,6 +1872,8 @@ def _build_coding_fallback_output(clean_topic: str, lang: str, topic_lower: str,
 
     is_oop = any(kw in topic_lower for kw in ["oop", "oops", "object oriented", "object-oriented", "class", "inheritance", "polymorphism", "encapsulation", "abstraction"])
     is_table = any(kw in topic_lower for kw in ["table", "multiplication", "multiply"])
+
+    resources_block = _build_resources_section(topic_lower, clean_topic, source_records, "coding or programming request")
 
     if is_oop:
         return f"""# Object-Oriented Programming (OOPs) in {lang_title}
@@ -1970,6 +2012,10 @@ Payload Capacity: 2.5 tons
 - **Abstract Classes (`abc.ABC`)**: Use `abstractmethod` to mandate that child classes implement specific methods.
 - **Properties (`@property`)**: Use getters and setters for controlled attribute access.
 
+---
+
+{resources_block}
+
 > {bottom_line}
 """
 
@@ -2052,12 +2098,14 @@ Enter range limit (press Enter for default 10): 10
 - **Indefinite Iteration (`while` loop)**: Can be written using `while i <= 10:` incrementing `i += 1`.
 - **Negative & Decimal Numbers**: Handles negative integers naturally (e.g. $-4 \\times 5 = -20$).
 
+---
+
+{resources_block}
+
 > {bottom_line}
 """
 
     else:
-        snippets = [s["snippet"] for s in source_records if s.get("snippet") and len(s["snippet"]) > 20][:3]
-        snippet_text = "\\n".join(f"- {{s}}" for s in snippets) if snippets else ""
         return f"""# {clean_topic} in {lang_title}
 
 ## 1. Theoretical Definition & Core Concepts
@@ -2112,7 +2160,6 @@ if __name__ == "__main__":
 Input Dataset: [10, 25, 40, 55, 70]
 Computed Result: 40.0
 ```
-{('\\n**Documentation References:**\\n' + snippet_text) if snippet_text else ''}
 
 ---
 
@@ -2120,6 +2167,10 @@ Computed Result: 40.0
 
 - **Validation**: Validate input types and boundary conditions before computation.
 - **Testing**: Write unit tests to verify behavior under edge conditions.
+
+---
+
+{resources_block}
 
 > {bottom_line}
 """
@@ -2648,6 +2699,8 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
 
 {resource_overview}"""
 
+    resources_block = _build_resources_section(topic, clean_topic, source_records, question_type)
+
     return f"""# Research Response: {clean_topic}
 
 ## Understanding the Question
@@ -2662,6 +2715,8 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
 {findings_body}
 
 {resources_section}
+
+{resources_block}
 
 ## Bottom Line
 
