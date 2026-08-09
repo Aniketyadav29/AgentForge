@@ -301,6 +301,9 @@ async def start_research(request: ResearchRequest):
     # Locally: run in a background thread for non-blocking SSE streaming.
     if IS_VERCEL:
         _run_and_persist()
+        # Read back from the in-memory crew session (still alive in this invocation)
+        _crew = get_crew_session(task_id)
+        _result = _crew.result if _crew else {}
         return ResearchResponse(
             task_id=task_id,
             status="completed",
@@ -308,6 +311,12 @@ async def start_research(request: ResearchRequest):
             depth=request.depth,
             message="Research completed. Fetch the result now.",
             timestamp=datetime.now().isoformat(),
+            # Embed the full result so the frontend can cache it in localStorage
+            report=_result.get("report", "") if _result else "",
+            activity_log=_crew.activity_log.get_all() if _crew else [],
+            agents_used=_result.get("agents_used", []) if _result else [],
+            duration_seconds=_result.get("duration_seconds") if _result else None,
+            activity_count=_result.get("activity_count") if _result else None,
         )
     else:
         thread = threading.Thread(target=_run_and_persist, daemon=True)

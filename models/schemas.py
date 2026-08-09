@@ -4,7 +4,7 @@ Request/response schemas for the FastAPI endpoints.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 
 
@@ -34,6 +34,13 @@ class ResearchResponse(BaseModel):
     depth: str
     message: str
     timestamp: str
+    # Populated only on Vercel (synchronous run) so the frontend can
+    # cache the full result without a second DB round-trip.
+    report: Optional[str] = None
+    activity_log: Optional[List[Any]] = None
+    agents_used: Optional[List[str]] = None
+    duration_seconds: Optional[float] = None
+    activity_count: Optional[int] = None
 
 
 class AgentActivity(BaseModel):

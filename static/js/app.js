@@ -3,6 +3,55 @@
  * Powers research streaming, document RAG, image generation, history, and health widgets.
  */
 
+// ─── LocalSessionCache ───────────────────────────────────────────────────────
+// Stores research sessions in localStorage so that Vercel deployments (which
+// use an ephemeral /tmp SQLite that resets between invocations) can still show
+// history and reload results after a page refresh.
+const LocalSessionCache = (() => {
+    const KEY = 'agentforge_sessions';
+    const MAX = 50;
+
+    function _load() {
+        try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
+        catch (e) { return []; }
+    }
+
+    function _save(sessions) {
+        try { localStorage.setItem(KEY, JSON.stringify(sessions)); } catch (e) {}
+    }
+
+    /** Save or update a full session record. */
+    function put(session) {
+        const sessions = _load();
+        const idx = sessions.findIndex((s) => s.task_id === session.task_id);
+        if (idx >= 0) sessions[idx] = session;
+        else sessions.unshift(session);
+        _save(sessions.slice(0, MAX));
+    }
+
+    /** Get one session by task_id. Returns null if not found. */
+    function get(taskId) {
+        return _load().find((s) => s.task_id === taskId) || null;
+    }
+
+    /** Get all cached sessions (newest first). */
+    function getAll() {
+        return _load();
+    }
+
+    /** Merge localStorage sessions with API sessions, API wins on duplicates. */
+    function mergeWithApi(apiSessions) {
+        const cached = _load();
+        const apiIds = new Set(apiSessions.map((s) => s.task_id));
+        // Add cached sessions that the API doesn't know about
+        const localOnly = cached.filter((s) => !apiIds.has(s.task_id));
+        return [...apiSessions, ...localOnly];
+    }
+
+    return { put, get, getAll, mergeWithApi };
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 const App = (() => {
     let currentTaskId = null;
     let currentDocId = null;
@@ -160,10 +209,27 @@ const App = (() => {
             ReportViewer.hideReport();
 
             // On Vercel serverless, the POST returns status='completed' immediately
-            // because the research ran synchronously. Skip SSE and fetch result directly.
+            // because the research ran synchronously. The full report is embedded in
+            // the response — save it to localStorage for offline history access.
             if (data.status === 'completed') {
                 showToast('Research crew launched.', 'success');
                 setSystemStatus('running', `Researching: ${truncate(topic, 44)}`);
+
+                // Persist the full session to localStorage immediately
+                LocalSessionCache.put({
+                    task_id: data.task_id,
+                    topic: data.topic,
+                    depth: data.depth,
+                    status: 'completed',
+                    report: data.report || '',
+                    activity_log: data.activity_log || [],
+                    agents_used: data.agents_used || [],
+                    duration_seconds: data.duration_seconds || null,
+                    activity_count: data.activity_count || 0,
+                    created_at: data.timestamp,
+                    completed_at: data.timestamp,
+                });
+
                 AgentsPanel.markAllCompleted();
                 await fetchAndShowResult(currentTaskId);
                 setSystemStatus('idle', 'Research completed');
@@ -232,9 +298,41 @@ const App = (() => {
     }
 
     async function fetchAndShowResult(taskId) {
+        // Check localStorage cache first (needed on Vercel where /tmp DB is ephemeral)
+        const cached = LocalSessionCache.get(taskId);
+        if (cached && cached.report) {
+            ReportViewer.showReport({
+                task_id: cached.task_id,
+                topic: cached.topic,
+                depth: cached.depth,
+                status: cached.status,
+                report: cached.report,
+                duration_seconds: cached.duration_seconds,
+                agents_used: cached.agents_used || [],
+                activity_count: cached.activity_count || (cached.activity_log || []).length,
+                activities: cached.activity_log || [],
+                timestamp: cached.completed_at || cached.created_at,
+            });
+            return;
+        }
+        // Fall back to API (works on local / hosted deployments with persistent DB)
         try {
             const response = await fetch(apiUrl(`/api/research/${taskId}/result`));
             const data = await readJsonResponse(response);
+            // Cache for future use
+            LocalSessionCache.put({
+                task_id: data.task_id || taskId,
+                topic: data.topic || '',
+                depth: data.depth || 'detailed',
+                status: data.status || 'completed',
+                report: data.report || '',
+                activity_log: data.activities || data.activity_log || [],
+                agents_used: data.agents_used || [],
+                duration_seconds: data.duration_seconds || null,
+                activity_count: data.activity_count || 0,
+                created_at: data.timestamp || new Date().toISOString(),
+                completed_at: data.timestamp || new Date().toISOString(),
+            });
             ReportViewer.showReport(data);
         } catch (error) {
             showToast(`Could not fetch report: ${error.message}`, 'error');
@@ -245,9 +343,12 @@ const App = (() => {
         try {
             const response = await fetch(apiUrl('/api/history'));
             const data = await readJsonResponse(response);
-            renderHistory(data.sessions || []);
+            // Merge API sessions with localStorage cache (Vercel: DB may be empty)
+            const merged = LocalSessionCache.mergeWithApi(data.sessions || []);
+            renderHistory(merged);
         } catch (error) {
-            renderHistory([]);
+            // API unavailable — fall back to localStorage only
+            renderHistory(LocalSessionCache.getAll());
         }
     }
 
@@ -282,11 +383,44 @@ const App = (() => {
     }
 
     async function loadHistoryItem(taskId) {
+        // Check localStorage cache first (needed on Vercel where /tmp DB is ephemeral)
+        const cached = LocalSessionCache.get(taskId);
+        if (cached && cached.report) {
+            currentTaskId = taskId;
+            switchMode('research');
+            hideWelcomeState();
+            ReportViewer.showReport({
+                report: cached.report || 'No report available for this session.',
+                task_id: taskId,
+                duration_seconds: cached.duration_seconds,
+                agents_used: cached.agents_used || [],
+                activity_count: cached.activity_count || (cached.activity_log || []).length,
+                depth: cached.depth,
+            });
+            loadHistory();
+            return;
+        }
+        // Fall back to API
         try {
             const response = await fetch(apiUrl(`/api/history/${taskId}`));
             const data = await readJsonResponse(response);
             const activityLog = parseJsonIfNeeded(data.activity_log);
             const agentsUsed = parseJsonIfNeeded(data.agents_used);
+
+            // Save to localStorage for next time
+            LocalSessionCache.put({
+                task_id: taskId,
+                topic: data.topic || '',
+                depth: data.depth || 'detailed',
+                status: data.status || 'completed',
+                report: data.report || '',
+                activity_log: activityLog,
+                agents_used: agentsUsed,
+                duration_seconds: data.duration_seconds || null,
+                activity_count: activityLog.length,
+                created_at: data.created_at || new Date().toISOString(),
+                completed_at: data.completed_at || new Date().toISOString(),
+            });
 
             currentTaskId = taskId;
             switchMode('research');
