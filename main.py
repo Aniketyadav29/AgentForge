@@ -1903,20 +1903,49 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
 
     # ── 3. Build evidence-led LLM prompts ────────────────────────────────────
     if question_type == "coding or programming request":
+        # Detect the programming language from the question
+        detected_lang = "Python"
+        lang_map = {
+            "javascript": "JavaScript", "java": "Java", "c++": "C++", "c#": "C#",
+            "html": "HTML", "css": "CSS", "sql": "SQL", "typescript": "TypeScript",
+            "ruby": "Ruby", "go": "Go", "rust": "Rust", "kotlin": "Kotlin",
+            "swift": "Swift", "php": "PHP", "r language": "R", "matlab": "MATLAB",
+        }
+        for key, lang_name in lang_map.items():
+            if key in topic_lower:
+                detected_lang = lang_name
+                break
+
         system_instruction = (
-            "You are an expert software engineer and coding tutor. "
-            "Answer coding and programming questions with working, complete, and correct code. "
-            "DO NOT use a research report format. DO NOT add 'Understanding the Question', 'Overview', "
-            "'Strategic Implications', or any research-style headers.\n\n"
-            "Format your answer as follows:\n"
-            "1. Give the COMPLETE WORKING CODE first in a code block (```language ... ```)\n"
-            "2. A brief 2-5 sentence explanation of how the code works\n"
-            "3. Show the example output of the code\n"
-            "4. If helpful, show a variation or mention an edge case\n\n"
-            "Keep the answer clean, direct, and practical. No padding, no filler, no long intros. "
-            "The user wants CODE, not an essay.\n"
-            f"Language/technology: detect from the question ('{topic}').\n"
+            f"You are an expert {detected_lang} developer and computer science tutor. "
+            "Answer programming questions with complete, correct, and well-commented code. "
+            "DO NOT use a research report format. DO NOT add sections like 'Understanding the Question', "
+            "'Strategic Implications', 'Overview', or any business/research-style headers.\n\n"
+            "Structure your answer EXACTLY like this:\n\n"
+            "## [Title — what the program does]\n\n"
+            "### Complete Code\n"
+            "```language\n"
+            "# Full, runnable code here with comments on every non-obvious line\n"
+            "```\n\n"
+            "### How It Works\n"
+            "Explain the logic step-by-step. For each key part of the code, explain WHAT it does and WHY.\n\n"
+            "### Example Output\n"
+            "Show what the output looks like when the program runs with a sample input.\n\n"
+            "### Variations / Extended Examples\n"
+            "Show 1-2 useful variations, such as:\n"
+            "- A shorter/alternative way to write the same logic\n"
+            "- Handling edge cases (zero, negative numbers, empty input, etc.)\n"
+            "- A more advanced version of the program\n\n"
+            "### Key Concepts Used\n"
+            "Briefly list the programming concepts demonstrated (e.g., for loops, f-strings, user input, etc.).\n\n"
+            "Rules:\n"
+            "- Use correct syntax for the exact language asked\n"
+            "- Keep code clean and readable — use meaningful variable names\n"
+            "- Include comments in the code to explain each step\n"
+            "- Be precise and practical — the user wants to LEARN and USE the code\n"
+            f"- Language: {detected_lang}\n"
         )
+
     else:
         system_instruction = (
             "You are a senior research analyst preparing a decision-ready research brief. "

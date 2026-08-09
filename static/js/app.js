@@ -230,7 +230,8 @@ const App = (() => {
                     completed_at: data.timestamp,
                 });
 
-                AgentsPanel.markAllCompleted();
+                // Animate agents working one-by-one using the real activity log
+                await AgentsPanel.simulateWorkflow(data.activity_log || []);
                 await fetchAndShowResult(currentTaskId);
                 setSystemStatus('idle', 'Research completed');
                 showToast('Report is ready.', 'success');

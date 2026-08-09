@@ -213,6 +213,56 @@ const AgentsPanel = (() => {
     }
 
     /**
+     * Simulate agent workflow from an activity log (used on Vercel where SSE is unavailable).
+     * Animates agents one-by-one, replaying the real activity log with delays.
+     * Returns a Promise that resolves when the animation is complete.
+     */
+    function simulateWorkflow(activityLog) {
+        return new Promise((resolve) => {
+            // Default workflow if no activity log provided
+            const DEFAULT_WORKFLOW = [
+                { agent: 'Research Strategist', action: 'starting', content: 'Analyzing topic and structuring research plan...' },
+                { agent: 'Research Strategist', action: 'completed task', content: 'Research plan ready.' },
+                { agent: 'Web Research Specialist', action: 'searching the web', content: 'Querying live search engines...' },
+                { agent: 'Web Research Specialist', action: 'completed task', content: 'Live web sources gathered.' },
+                { agent: 'Data Analyst', action: 'processing', content: 'Structuring findings and extracting key data points...' },
+                { agent: 'Data Analyst', action: 'completed task', content: 'Data analysis complete.' },
+                { agent: 'Report Writer', action: 'processing', content: 'Compiling comprehensive research report...' },
+                { agent: 'Report Writer', action: 'completed task', content: 'Report compiled successfully.' },
+            ];
+
+            const events = (activityLog && activityLog.length > 0) ? activityLog : DEFAULT_WORKFLOW;
+
+            // Add timestamps if missing
+            const now = Date.now();
+            const eventsWithTime = events.map((e, i) => ({
+                ...e,
+                timestamp: e.timestamp || new Date(now + i * 100).toISOString(),
+            }));
+
+            let i = 0;
+            // Pace: spread events over ~3 seconds max so the animation is fast but visible
+            const delay = Math.min(600, Math.floor(3000 / (eventsWithTime.length || 1)));
+
+            function step() {
+                if (i >= eventsWithTime.length) {
+                    // All done — mark any still-waiting agents as completed
+                    Object.keys(AGENTS).forEach(name => {
+                        if (name !== 'System') setAgentState(name, 'completed', 'Done ✓');
+                    });
+                    resolve();
+                    return;
+                }
+                const activity = eventsWithTime[i++];
+                processActivity(activity);
+                window.setTimeout(step, delay);
+            }
+
+            step();
+        });
+    }
+
+    /**
      * Clear the activity timeline.
      */
     function clearTimeline() {
@@ -270,6 +320,7 @@ const AgentsPanel = (() => {
         addTimelineEntry,
         processActivity,
         markAllCompleted,
+        simulateWorkflow,
         clearTimeline,
     };
 })();
