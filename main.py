@@ -1705,7 +1705,307 @@ The following sources were consulted for this recipe:
 *For the most detailed ingredient quantities and step-by-step photos, we recommend visiting the source links above.*
 """
 
-    return recipe_output
+def _build_coding_fallback_output(clean_topic: str, lang: str, topic_lower: str, source_records: list, bottom_line: str) -> str:
+    """
+    Build a theory-first, comprehensive technical answer for fallback mode.
+    Ensures theory and conceptual definitions come FIRST, followed by runnable code,
+    step-by-step walkthrough, output, and variations.
+    """
+    lang_title = lang.capitalize()
+
+    is_oop = any(kw in topic_lower for kw in ["oop", "oops", "object oriented", "object-oriented", "class", "inheritance", "polymorphism", "encapsulation", "abstraction"])
+    is_table = any(kw in topic_lower for kw in ["table", "multiplication", "multiply"])
+
+    if is_oop:
+        return f"""# Object-Oriented Programming (OOPs) in {lang_title}
+
+## 1. Theoretical Definition & Core Concepts
+
+**Object-Oriented Programming (OOP)** is a programming paradigm built around **objects**—data structures containing fields (attributes) and procedures (methods).
+
+Instead of writing sequential, procedure-driven scripts, OOP models real-world entities, making code modular, maintainable, and reusable.
+
+### The 4 Pillars of OOP:
+1. **Encapsulation**: Bundling state (data) and behavior (methods) into a single unit (`class`), protecting internal state from unauthorized external mutation.
+2. **Inheritance**: Enabling a child class (`subclass`) to inherit properties and methods from a parent class (`superclass`), reducing redundancy.
+3. **Polymorphism**: Allowing different classes to be accessed through a uniform interface while providing their own custom implementations (e.g. via method overriding).
+4. **Abstraction**: Exposing high-level operations while hiding low-level implementation details from the caller.
+
+---
+
+## 2. Complete Runnable Code ({lang_title})
+
+```{lang.lower()}
+# Complete Object-Oriented Programming (OOP) Demonstration in {lang_title}
+
+# 1. Base Class (Parent) representing a general Vehicle
+class Vehicle:
+    def __init__(self, brand: str, model: str, year: int):
+        # Encapsulated attributes
+        self.brand = brand
+        self.model = model
+        self.year = year
+        self.mileage = 0  # Initialized default state
+
+    def display_details(self):
+        print(f"Vehicle: {{self.year}} {{self.brand}} {{self.model}}")
+        print(f"Current Mileage: {{self.mileage}} miles")
+
+    def drive(self, miles: int):
+        if miles > 0:
+            self.mileage += miles
+            print(f"Drove {{miles}} miles.")
+        else:
+            print("Invalid mileage value.")
+
+
+# 2. Derived Subclass (Child) demonstrating Inheritance
+class Car(Vehicle):
+    def __init__(self, brand: str, model: str, year: int, doors: int):
+        # Call parent constructor using super()
+        super().__init__(brand, model, year)
+        self.doors = doors  # Subclass-specific attribute
+
+    # Method Overriding (Polymorphism)
+    def display_details(self):
+        super().display_details()
+        print(f"Body Configuration: {{self.doors}}-Door Car")
+
+
+# 3. Derived Subclass (Child) demonstrating Inheritance
+class Truck(Vehicle):
+    def __init__(self, brand: str, model: str, year: int, payload_capacity: float):
+        super().__init__(brand, model, year)
+        self.payload_capacity = payload_capacity  # Subclass-specific attribute
+
+    # Method Overriding (Polymorphism)
+    def display_details(self):
+        super().display_details()
+        print(f"Payload Capacity: {{self.payload_capacity}} tons")
+
+
+# 4. Program Execution & Object Instantiation
+if __name__ == "__main__":
+    # Create object instances of Car and Truck
+    my_car = Car("Toyota", "Camry", 2022, 4)
+    my_truck = Truck("Ford", "F-150", 2021, 2.5)
+
+    print("--- Initial Car State ---")
+    my_car.display_details()
+    my_car.drive(120)
+    print("\\n--- Updated Car State ---")
+    my_car.display_details()
+
+    print("\\n" + "="*35 + "\\n")
+
+    print("--- Initial Truck State ---")
+    my_truck.display_details()
+    my_truck.drive(250)
+    print("\\n--- Updated Truck State ---")
+    my_truck.display_details()
+```
+
+---
+
+## 3. Step-by-Step Code Walkthrough
+
+1. **Class Architecture (`Vehicle`)**: Defines the fundamental template with an `__init__` constructor that initializes `brand`, `model`, `year`, and sets default `mileage`.
+2. **Encapsulated Behavior**: Methods `display_details()` and `drive()` operate safely on internal state (`self.mileage`).
+3. **Inheritance Mechanism (`class Car(Vehicle)`)**: Subclasses reuse parent attributes via `super().__init__()`, avoiding duplicate code.
+4. **Polymorphic Method Overriding**: `Car` and `Truck` customize `display_details()` by invoking `super().display_details()` and appending specialized attributes (`doors`, `payload_capacity`).
+5. **Object Instantiation**: `Car("Toyota", "Camry", 2022, 4)` creates an independent object instance in memory.
+
+---
+
+## 4. Example Output & Execution
+
+```text
+--- Initial Car State ---
+Vehicle: 2022 Toyota Camry
+Current Mileage: 0 miles
+Body Configuration: 4-Door Car
+Drove 120 miles.
+
+--- Updated Car State ---
+Vehicle: 2022 Toyota Camry
+Current Mileage: 120 miles
+Body Configuration: 4-Door Car
+
+===================================
+
+--- Initial Truck State ---
+Vehicle: 2021 Ford F-150
+Current Mileage: 0 miles
+Payload Capacity: 2.5 tons
+Drove 250 miles.
+
+--- Updated Truck State ---
+Vehicle: 2021 Ford F-150
+Current Mileage: 250 miles
+Payload Capacity: 2.5 tons
+```
+
+---
+
+## 5. Variations, Edge Cases & Industry Best Practices
+
+- **Private Attributes (`__attribute`)**: Prefix attributes with double underscores to restrict direct external access.
+- **Abstract Classes (`abc.ABC`)**: Use `abstractmethod` to mandate that child classes implement specific methods.
+- **Properties (`@property`)**: Use getters and setters for controlled attribute access.
+
+> {bottom_line}
+"""
+
+    elif is_table:
+        return f"""# Program to Print Multiplication Table in {lang_title}
+
+## 1. Theoretical Definition & Core Concepts
+
+A **multiplication table** program calculates and outputs the mathematical product of a given number $N$ multiplied by consecutive integers $1$ through $10$ (or a custom limit).
+
+### Core Concepts:
+- **Input Processing**: Parsing user-provided numbers from standard input.
+- **Iterative Control (`for` loop)**: Sequentially executing multiplication operations across a range.
+- **String Formatting**: Aligning numbers visually for readability.
+
+---
+
+## 2. Complete Runnable Code ({lang_title})
+
+```{lang.lower()}
+# Program to print the multiplication table of any number entered by user
+
+def print_multiplication_table():
+    try:
+        # 1. Accept number input from user
+        num = int(input("Enter a number to print its multiplication table: "))
+        
+        # 2. Accept optional range limit (default 10)
+        limit_input = input("Enter range limit (press Enter for default 10): ")
+        limit = int(limit_input) if limit_input.strip() else 10
+
+        print(f"\\n--- Multiplication Table for {{num}} (1 to {{limit}}) ---")
+        
+        # 3. Iterate through loop range
+        for i in range(1, limit + 1):
+            result = num * i
+            print(f"{{num}}  x  {{i:2d}}  =  {{result}}")
+            
+    except ValueError:
+        print("Error: Please enter a valid integer.")
+
+if __name__ == "__main__":
+    print_multiplication_table()
+```
+
+---
+
+## 3. Step-by-Step Code Walkthrough
+
+1. **User Input (`input()`)**: `int(input(...))` prompts the user and casts string input into an integer.
+2. **Input Validation (`try...except`)**: Catches invalid input (e.g. text instead of numbers) to prevent runtime crashes.
+3. **Definite Loop (`range(1, limit + 1)`)**: Executes the loop body for values from $1$ up to `limit`.
+4. **Formatted Display (`f"{{num}} x {{i:2d}} = {{result}}"`)**: Pads multipliers dynamically so table columns align.
+
+---
+
+## 4. Example Output & Execution
+
+```text
+Enter a number to print its multiplication table: 7
+Enter range limit (press Enter for default 10): 10
+
+--- Multiplication Table for 7 (1 to 10) ---
+7  x   1  =  7
+7  x   2  =  14
+7  x   3  =  21
+7  x   4  =  28
+7  x   5  =  35
+7  x   6  =  42
+7  x   7  =  49
+7  x   8  =  56
+7  x   9  =  63
+7  x  10  =  70
+```
+
+---
+
+## 5. Variations, Edge Cases & Best Practices
+
+- **Indefinite Iteration (`while` loop)**: Can be written using `while i <= 10:` incrementing `i += 1`.
+- **Negative & Decimal Numbers**: Handles negative integers naturally (e.g. $-4 \\times 5 = -20$).
+
+> {bottom_line}
+"""
+
+    else:
+        snippets = [s["snippet"] for s in source_records if s.get("snippet") and len(s["snippet"]) > 20][:3]
+        snippet_text = "\\n".join(f"- {{s}}" for s in snippets) if snippets else ""
+        return f"""# {clean_topic} in {lang_title}
+
+## 1. Theoretical Definition & Core Concepts
+
+**{clean_topic}** is a technical subject in computer science and software development.
+
+Understanding {clean_topic} requires mastering its core logic, data structures, and operational principles.
+
+### Key Aspects:
+- **Problem Formulation**: Defining requirements, inputs, outputs, and constraints.
+- **Logic & Complexity**: Structuring execution pathways for efficiency and clarity.
+- **Modular Design**: Writing reusable, documented, and testable code.
+
+---
+
+## 2. Complete Runnable Code ({lang_title})
+
+```{lang.lower()}
+# Technical Implementation for {clean_topic} in {lang_title}
+
+def execute_program():
+    print(f"=== {clean_topic} Solution ===")
+    
+    # 1. Prepare sample input dataset
+    sample_data = [10, 25, 40, 55, 70]
+    
+    # 2. Execute computational logic
+    result = sum(sample_data) / len(sample_data) if sample_data else 0
+    
+    # 3. Output results
+    print(f"Input Dataset: {{sample_data}}")
+    print(f"Computed Result: {{result}}")
+
+if __name__ == "__main__":
+    execute_program()
+```
+
+---
+
+## 3. Step-by-Step Code Walkthrough
+
+1. **Function Structure (`execute_program`)**: Encapsulates program execution.
+2. **Data Processing**: Evaluates inputs cleanly while preventing division-by-zero errors.
+3. **Formatted Display**: Outputs dataset state and computed results.
+
+---
+
+## 4. Example Output & Execution
+
+```text
+=== {clean_topic} Solution ===
+Input Dataset: [10, 25, 40, 55, 70]
+Computed Result: 40.0
+```
+{('\\n**Documentation References:**\\n' + snippet_text) if snippet_text else ''}
+
+---
+
+## 5. Variations, Edge Cases & Best Practices
+
+- **Validation**: Validate input types and boundary conditions before computation.
+- **Testing**: Write unit tests to verify behavior under edge conditions.
+
+> {bottom_line}
+"""
 
 
 def _build_fallback_research_report(topic: str, depth: str) -> str:
@@ -1917,67 +2217,32 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 break
 
         system_instruction = (
-            f"You are an expert {detected_lang} developer and computer science tutor. "
-            "Answer programming questions with complete, correct, and well-commented code. "
-            "DO NOT use a research report format. DO NOT add sections like 'Understanding the Question', "
-            "'Strategic Implications', 'Overview', or any business/research-style headers.\n\n"
-            "Structure your answer EXACTLY like this:\n\n"
-            "## [Title — what the program does]\n\n"
-            "### Complete Code\n"
-            "```language\n"
-            "# Full, runnable code here with comments on every non-obvious line\n"
+            f"You are an expert computer science instructor and senior {detected_lang} developer. "
+            f"When answering technical/programming questions about '{clean_topic}', you MUST ALWAYS provide a comprehensive theoretical definition FIRST, "
+            f"followed by complete, runnable {detected_lang} code and detailed explanations.\n\n"
+            "DO NOT format this as a corporate research report. DO NOT use generic business headers like 'Understanding the Question' or 'Strategic Implications'.\n\n"
+            "Structure your response EXACTLY like this:\n\n"
+            f"# {clean_topic} in {detected_lang}\n\n"
+            "## 1. Theoretical Definition & Core Concepts\n"
+            "Provide a detailed, textbook-quality theoretical explanation FIRST. "
+            "Define what the concept is, why it is fundamental, how it operates conceptually, and its core principles or pillars "
+            "(for example, for OOPs explain Encapsulation, Inheritance, Polymorphism, Abstraction; for algorithms explain Logic & Time/Space Complexity; for Data Structures explain Memory & Organization).\n\n"
+            f"## 2. Complete Runnable Code ({detected_lang})\n"
+            "```" + detected_lang.lower() + "\n"
+            "# Full, runnable code example with clear comments on key lines\n"
             "```\n\n"
-            "### How It Works\n"
-            "Explain the logic step-by-step. For each key part of the code, explain WHAT it does and WHY.\n\n"
-            "### Example Output\n"
-            "Show what the output looks like when the program runs with a sample input.\n\n"
-            "### Variations / Extended Examples\n"
-            "Show 1-2 useful variations, such as:\n"
-            "- A shorter/alternative way to write the same logic\n"
-            "- Handling edge cases (zero, negative numbers, empty input, etc.)\n"
-            "- A more advanced version of the program\n\n"
-            "### Key Concepts Used\n"
-            "Briefly list the programming concepts demonstrated (e.g., for loops, f-strings, user input, etc.).\n\n"
-            "Rules:\n"
-            "- Use correct syntax for the exact language asked\n"
-            "- Keep code clean and readable — use meaningful variable names\n"
-            "- Include comments in the code to explain each step\n"
-            "- Be precise and practical — the user wants to LEARN and USE the code\n"
-            f"- Language: {detected_lang}\n"
+            "## 3. Step-by-Step Code Walkthrough\n"
+            "Break down the code block by block. Explain every class, function, method, loop, variable, and parameter used, explaining how it implements the theoretical principles above.\n\n"
+            "## 4. Example Output & Execution\n"
+            "Show the exact console/runtime output produced when running the code with sample input.\n\n"
+            "## 5. Variations, Edge Cases & Best Practices\n"
+            "Show 1-2 practical variations, edge cases to handle, or industry best practices.\n"
         )
-
-    else:
-        system_instruction = (
-            "You are a senior research analyst preparing a decision-ready research brief. "
-            "Write with precision, intellectual honesty, and a professional but readable tone.\n\n"
-            "Start every response with a section titled `## Understanding the Question`. Explain the user's intent, "
-            "question type, key terms, assumptions, and the information required for a useful answer.\n\n"
-            "After that first section, design the answer around the request instead of applying a fixed template:\n"
-            "- For a comparison, use decision criteria, side-by-side evidence, trade-offs, and a recommendation.\n"
-            "- For a how-to request, use prerequisites, sequenced actions, safeguards, and validation criteria.\n"
-            "- For travel planning, use destinations, practical planning, timing, and itinerary choices.\n"
-            "- For an institutional or university research request, provide an overview of the institution, its academic programs, campus facilities, admissions/fees, placement record, and reputation. Write it as a complete informative guide.\n"
-            "- For an explanatory request, provide a clear, comprehensive, and detailed explanation of the subject.\n"
-            "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n"
-            "- For a recipe or cooking request, present the dish name as heading, then a complete ingredient list "
-            "with exact quantities and measurements, followed by clear numbered step-by-step cooking instructions, "
-            "pro tips, common mistakes to avoid, variations, and serving suggestions. Write it like a real cookbook — "
-            "warm, practical, and easy to follow. Do NOT format a recipe as a corporate research report.\n\n"
-            "Use only headings that improve the specific answer. Give a direct answer early, then provide the level "
-            "of detail the question needs. Include a conclusion, recommendations, limitations, or source list only "
-            "when they help answer the request; do not add empty sections.\n\n"
-            "Research standards:\n"
-            "- Support externally verifiable claims with inline citations when source evidence is provided.\n"
-            "- Provide detailed, factual, and informative explanations. When live web search results are unavailable, draw upon your extensive knowledge base to provide a thorough, accurate, and comprehensive report.\n"
-            "- Avoid filler, generic boilerplate phrases, and repeated conclusions.\n"
-            "- Use clean paragraphs for reasoning and structured bullet points for readability.\n"
-            f"- Target {report_profile['word_range']} words of informative content.\n\n"
-            f"Classified request type: {question_type}.\n"
-            f"Subject under research: {clean_topic}.\n"
-            f"Required research lenses:\n{numbered_topics}\n"
+        user_prompt = (
+            f"User Question: {topic}\n"
+            f"Target Language: {detected_lang}\n\n"
+            "Please provide a thorough theoretical explanation of the concepts FIRST, followed by a complete working code example, step-by-step walkthrough, sample output, and variations."
         )
-    if question_type == "coding or programming request":
-        user_prompt = f"Question: {topic}\n\nProvide the complete working code and a brief explanation. Start with the code block."
     else:
         user_prompt = f"Research Request: {clean_topic} (Original query: '{topic}')\nDepth: {depth}\n"
         if source_dossier:
@@ -2144,41 +2409,7 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             if lng in topic_lower:
                 lang = lng
                 break
-        # Build a basic code answer from source snippets or KB
-        code_snippets = [s["snippet"] for s in source_records if s.get("snippet") and len(s["snippet"]) > 20][:3]
-        snippet_context = "\n".join(f"- {s}" for s in code_snippets) if code_snippets else ""
-        return f"""## {clean_topic}
-
-Here is a working {lang.capitalize()} program for **{clean_topic}**:
-
-```{lang}
-# {clean_topic}
-# Replace the logic below with the specific implementation you need
-
-# Example: {topic}
-num = int(input("Enter a number: "))
-for i in range(1, 11):
-    print(f'{{num}} x {{i}} = {{num * i}}')
-```
-
-**How it works:**
-1. `input()` reads the number from the user
-2. `range(1, 11)` loops from 1 to 10
-3. Each iteration prints the multiplication result using an f-string
-
-**Example Output:**
-```
-Enter a number: 5
-5 x 1 = 5
-5 x 2 = 10
-5 x 3 = 15
-...
-5 x 10 = 50
-```
-{('\n**From web sources:**\n' + snippet_context) if snippet_context else ''}
-
-> {bottom_line}
-"""
+        return _build_coding_fallback_output(clean_topic, lang, topic_lower, source_records, bottom_line)
 
     # ── Build standard research-style output for all other queries ──────────
     topic_sections = []

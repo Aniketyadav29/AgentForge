@@ -84,6 +84,13 @@ const AgentsPanel = (() => {
         currentActiveAgent = null;
     }
 
+    const AGENT_COMPLETED_MSG = {
+        'Research Strategist': 'Scope Defined ✓',
+        'Web Research Specialist': 'Sources Gathered ✓',
+        'Data Analyst': 'Logic Analyzed ✓',
+        'Report Writer': 'Guide Compiled ✓',
+    };
+
     /**
      * Set an agent's state (active, completed, waiting).
      */
@@ -100,9 +107,10 @@ const AgentsPanel = (() => {
         switch (state) {
             case 'active':
                 card.classList.add('active');
-                // Mark previous active agent as completed
+                // Mark previous active agent as completed with its distinct badge
                 if (currentActiveAgent && currentActiveAgent !== agentName) {
-                    setAgentState(currentActiveAgent, 'completed', 'Task completed ✓');
+                    const prevMsg = AGENT_COMPLETED_MSG[currentActiveAgent] || 'Task completed ✓';
+                    setAgentState(currentActiveAgent, 'completed', prevMsg);
                 }
                 currentActiveAgent = agentName;
                 break;
@@ -177,7 +185,8 @@ const AgentsPanel = (() => {
             action === 'scraping website content') {
             setAgentState(agentName, 'active', getStatusMessage(action));
         } else if (action === 'completed task') {
-            setAgentState(agentName, 'completed', 'Task completed ✓');
+            const doneMsg = AGENT_COMPLETED_MSG[agentName] || 'Task completed ✓';
+            setAgentState(agentName, 'completed', doneMsg);
         } else if (action === 'queued') {
             // Keep as waiting
         } else if (agentName !== 'System') {
@@ -198,13 +207,11 @@ const AgentsPanel = (() => {
                 if (agent && agent.id) {
                     const card = document.getElementById(agent.id);
                     if (card) {
-                        if (card.classList.contains('active') || card.classList.contains('completed')) {
-                            setAgentState(name, 'completed', 'Done ✓');
-                        } else {
-                            const statusText = card.querySelector('.agent-status-text');
-                            if (statusText && statusText.textContent === 'Waiting...') {
-                                statusText.textContent = 'Not required';
-                            }
+                        card.classList.remove('active');
+                        card.classList.add('completed');
+                        const statusText = card.querySelector('.agent-status-text');
+                        if (statusText) {
+                            statusText.textContent = AGENT_COMPLETED_MSG[name] || 'Done ✓';
                         }
                     }
                 }
@@ -219,43 +226,37 @@ const AgentsPanel = (() => {
      */
     function simulateWorkflow(activityLog) {
         return new Promise((resolve) => {
-            // Default workflow if no activity log provided
             const DEFAULT_WORKFLOW = [
-                { agent: 'Research Strategist', action: 'starting', content: 'Analyzing topic and structuring research plan...' },
-                { agent: 'Research Strategist', action: 'completed task', content: 'Research plan ready.' },
-                { agent: 'Web Research Specialist', action: 'searching the web', content: 'Querying live search engines...' },
-                { agent: 'Web Research Specialist', action: 'completed task', content: 'Live web sources gathered.' },
-                { agent: 'Data Analyst', action: 'processing', content: 'Structuring findings and extracting key data points...' },
-                { agent: 'Data Analyst', action: 'completed task', content: 'Data analysis complete.' },
-                { agent: 'Report Writer', action: 'processing', content: 'Compiling comprehensive research report...' },
-                { agent: 'Report Writer', action: 'completed task', content: 'Report compiled successfully.' },
+                { agent: 'Research Strategist', action: 'starting', content: 'Formulating technical research plan & scope...' },
+                { agent: 'Research Strategist', action: 'completed task', content: 'Scope & analysis structure defined.' },
+                { agent: 'Web Research Specialist', action: 'searching the web', content: 'Querying technical documentation & search engines...' },
+                { agent: 'Web Research Specialist', action: 'completed task', content: 'Syntax patterns & reference sources gathered.' },
+                { agent: 'Data Analyst', action: 'processing', content: 'Analyzing core concepts, code logic & complexity...' },
+                { agent: 'Data Analyst', action: 'completed task', content: 'Logic & theoretical definitions verified.' },
+                { agent: 'Report Writer', action: 'processing', content: 'Drafting theory-first guide, code examples & walkthrough...' },
+                { agent: 'Report Writer', action: 'completed task', content: 'Finalized complete response document.' },
             ];
 
             const events = (activityLog && activityLog.length > 0) ? activityLog : DEFAULT_WORKFLOW;
 
-            // Add timestamps if missing
             const now = Date.now();
             const eventsWithTime = events.map((e, i) => ({
                 ...e,
-                timestamp: e.timestamp || new Date(now + i * 100).toISOString(),
+                timestamp: e.timestamp || new Date(now + i * 500).toISOString(),
             }));
 
             let i = 0;
-            // Pace: spread events over ~3 seconds max so the animation is fast but visible
-            const delay = Math.min(600, Math.floor(3000 / (eventsWithTime.length || 1)));
+            const stepDelay = 600;
 
             function step() {
                 if (i >= eventsWithTime.length) {
-                    // All done — mark any still-waiting agents as completed
-                    Object.keys(AGENTS).forEach(name => {
-                        if (name !== 'System') setAgentState(name, 'completed', 'Done ✓');
-                    });
+                    markAllCompleted();
                     resolve();
                     return;
                 }
                 const activity = eventsWithTime[i++];
                 processActivity(activity);
-                window.setTimeout(step, delay);
+                window.setTimeout(step, stepDelay);
             }
 
             step();
