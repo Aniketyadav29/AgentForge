@@ -2268,6 +2268,9 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         "visit", "place", "destination", "travel", "tour", "vacation", "trip", "attraction",
         "scotland", "scottland", "india", "japan", "europe", "paris", "london", "italy"
     ])
+    is_comparison_query = any(term in topic_lower for term in [" vs ", "versus", "compare", "difference between", "better than"])
+    is_how_to_query = topic_lower.startswith("how ") or any(term in topic_lower for term in ["how to", "steps to", "implementation", "strategy for"])
+    is_current_query = any(term in topic_lower for term in ["latest", "current", "today", "recent", "2026", "trend", "outlook"])
     has_math_ops = bool(re.search(r'[\d\)\xdf\xaa\xb2\xb3]\s*[\+\-\*\/\^\%\=]\s*[\d\(\xdf\xaa\xb2\xb3]', topic)) or bool(re.search(r'\d+\s*[\+\-\*\/\^\%]\s*\d+', topic))
     is_math_query = has_math_ops or (any(kw in topic_lower for kw in [
         "math", "solve", "calculate", "evaluation", "eval", "what is the answer of",
