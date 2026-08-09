@@ -231,8 +231,10 @@ async def start_research(request: ResearchRequest):
 
         report_text = ""
         try:
-            if not RESEARCH_RUNTIME_ERROR:
+            if not RESEARCH_RUNTIME_ERROR and not IS_VERCEL:
                 # Try the full CrewAI multi-agent pipeline with a hard timeout
+                # (skipped on Vercel: background threads are unreliable in serverless
+                # and the 240s join would exhaust the 300s function budget)
                 result_holder: list = []
                 error_holder: list = []
                 crewai_thread = threading.Thread(
@@ -258,7 +260,7 @@ async def start_research(request: ResearchRequest):
                     result = result_holder[0]
                     report_text = result.get("report", "") if isinstance(result, dict) else str(result)
             else:
-                # CrewAI not available — use fast fallback pipeline directly
+                # Vercel or CrewAI not available — use fast fallback pipeline directly
                 report_text = _run_fallback_pipeline()
 
             duration = round(time.time() - started_at, 2)
@@ -1733,7 +1735,8 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
                 headers={"X-API-KEY": serper_key, "Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            serper_timeout = 6 if IS_VERCEL else 10
+            with urllib.request.urlopen(req, timeout=serper_timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 raw_search_items = data.get("organic", [])
         except Exception as e:
@@ -1916,8 +1919,10 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
         user_prompt += f"\nNote: Live search results could not be retrieved. Please write a detailed, comprehensive, and well-structured report on '{clean_topic}' using your extensive internal knowledge base.\n"
     user_prompt += "\nWrite the complete research report using the required structure."
 
-    # ── 4. Helper: call LLM with 60s timeout ─────────────────────────────────
-    LLM_TIMEOUT = 60  # 60s allows Gemini to complete full generation cleanly
+    # ── 4. Helper: call LLM with adaptive timeout ─────────────────────────────
+    # On Vercel serverless the whole function must complete within 300s.
+    # Use a tighter 25s per-model timeout so the full pipeline stays under budget.
+    LLM_TIMEOUT = 25 if IS_VERCEL else 60
 
     def _call_with_timeout(fn):
         """Run fn() in a thread; return its result or None on timeout/error."""
@@ -1938,7 +1943,9 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
 
     # ── 5. Try Gemini (Primary - gemini-2.0-flash / gemini-1.5-flash) ───────
     if gemini_key and gemini_key not in ("your_gemini_api_key_here", ""):
-        for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        # On Vercel use only the fastest model to stay within the 300s function budget
+        gemini_models = ["gemini-2.0-flash"] if IS_VERCEL else ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        for model in gemini_models:
             def _try_gemini(m=model):
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
                 payload = {
@@ -1961,7 +1968,9 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
 
     # ── 6. Try Groq ─────────────────────────────────────────────────────────
     if groq_key and groq_key not in ("your_groq_api_key_here", ""):
-        for gmodel in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]:
+        # On Vercel use only the fastest Groq model to stay within the 300s function budget
+        groq_models = ["llama-3.1-8b-instant"] if IS_VERCEL else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+        for gmodel in groq_models:
             def _try_groq(m=gmodel):
                 payload = {
                     "model": m,
