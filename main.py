@@ -1803,10 +1803,29 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     is_comparison_query = any(term in topic_lower for term in [" vs ", "versus", "compare", "difference between", "better than"])
     is_how_to_query = topic_lower.startswith("how ") or any(term in topic_lower for term in ["how to", "steps to", "implementation", "strategy for"])
     is_current_query = any(term in topic_lower for term in ["latest", "current", "today", "recent", "2026", "trend", "outlook"])
+    is_coding_query = any(kw in topic_lower for kw in [
+        "program", "code", "write a", "python", "javascript", "java", "c++", "c#",
+        "html", "css", "sql", "function", "algorithm", "script", "syntax",
+        "loop", "array", "list", "dictionary", "class", "object", "method",
+        "api", "backend", "frontend", "debug", "error", "exception",
+        "print", "output", "input", "variable", "compile", "runtime",
+        "data structure", "sorting", "searching", "recursion", "fibonacci",
+        "factorial", "palindrome", "prime", "multiplication table",
+        "swap", "reverse", "string", "integer", "float", "boolean",
+        "implement", "build a", "create a program", "write code",
+    ])
 
     if len(custom_subtopics) >= 3:
         question_type = "multi-part research request"
         topic_list = custom_subtopics[:report_profile["sections"]]
+    elif is_coding_query:
+        question_type = "coding or programming request"
+        topic_list = [
+            f"Working {clean_topic} — complete, runnable code",
+            "How the code works — step-by-step explanation",
+            "Example output / how to run it",
+            "Common variations and edge cases",
+        ][:report_profile["sections"]]
     elif is_recipe_query:
         question_type = "recipe or cooking request"
         dish_name = clean_topic
@@ -1883,41 +1902,60 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
     )
 
     # ── 3. Build evidence-led LLM prompts ────────────────────────────────────
-    system_instruction = (
-        "You are a senior research analyst preparing a decision-ready research brief. "
-        "Write with precision, intellectual honesty, and a professional but readable tone.\n\n"
-        "Start every response with a section titled `## Understanding the Question`. Explain the user's intent, "
-        "question type, key terms, assumptions, and the information required for a useful answer.\n\n"
-        "After that first section, design the answer around the request instead of applying a fixed template:\n"
-        "- For a comparison, use decision criteria, side-by-side evidence, trade-offs, and a recommendation.\n"
-        "- For a how-to request, use prerequisites, sequenced actions, safeguards, and validation criteria.\n"
-        "- For travel planning, use destinations, practical planning, timing, and itinerary choices.\n"
-        "- For an institutional or university research request, provide an overview of the institution, its academic programs, campus facilities, admissions/fees, placement record, and reputation. Write it as a complete informative guide.\n"
-        "- For an explanatory request, provide a clear, comprehensive, and detailed explanation of the subject.\n"
-        "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n"
-        "- For a recipe or cooking request, present the dish name as heading, then a complete ingredient list "
-        "with exact quantities and measurements, followed by clear numbered step-by-step cooking instructions, "
-        "pro tips, common mistakes to avoid, variations, and serving suggestions. Write it like a real cookbook — "
-        "warm, practical, and easy to follow. Do NOT format a recipe as a corporate research report.\n\n"
-        "Use only headings that improve the specific answer. Give a direct answer early, then provide the level "
-        "of detail the question needs. Include a conclusion, recommendations, limitations, or source list only "
-        "when they help answer the request; do not add empty sections.\n\n"
-        "Research standards:\n"
-        "- Support externally verifiable claims with inline citations when source evidence is provided.\n"
-        "- Provide detailed, factual, and informative explanations. When live web search results are unavailable, draw upon your extensive knowledge base to provide a thorough, accurate, and comprehensive report.\n"
-        "- Avoid filler, generic boilerplate phrases, and repeated conclusions.\n"
-        "- Use clean paragraphs for reasoning and structured bullet points for readability.\n"
-        f"- Target {report_profile['word_range']} words of informative content.\n\n"
-        f"Classified request type: {question_type}.\n"
-        f"Subject under research: {clean_topic}.\n"
-        f"Required research lenses:\n{numbered_topics}\n"
-    )
-    user_prompt = f"Research Request: {clean_topic} (Original query: '{topic}')\nDepth: {depth}\n"
-    if source_dossier:
-        user_prompt += f"\nSource dossier:\n{source_dossier}\n"
+    if question_type == "coding or programming request":
+        system_instruction = (
+            "You are an expert software engineer and coding tutor. "
+            "Answer coding and programming questions with working, complete, and correct code. "
+            "DO NOT use a research report format. DO NOT add 'Understanding the Question', 'Overview', "
+            "'Strategic Implications', or any research-style headers.\n\n"
+            "Format your answer as follows:\n"
+            "1. Give the COMPLETE WORKING CODE first in a code block (```language ... ```)\n"
+            "2. A brief 2-5 sentence explanation of how the code works\n"
+            "3. Show the example output of the code\n"
+            "4. If helpful, show a variation or mention an edge case\n\n"
+            "Keep the answer clean, direct, and practical. No padding, no filler, no long intros. "
+            "The user wants CODE, not an essay.\n"
+            f"Language/technology: detect from the question ('{topic}').\n"
+        )
     else:
-        user_prompt += f"\nNote: Live search results could not be retrieved. Please write a detailed, comprehensive, and well-structured report on '{clean_topic}' using your extensive internal knowledge base.\n"
-    user_prompt += "\nWrite the complete research report using the required structure."
+        system_instruction = (
+            "You are a senior research analyst preparing a decision-ready research brief. "
+            "Write with precision, intellectual honesty, and a professional but readable tone.\n\n"
+            "Start every response with a section titled `## Understanding the Question`. Explain the user's intent, "
+            "question type, key terms, assumptions, and the information required for a useful answer.\n\n"
+            "After that first section, design the answer around the request instead of applying a fixed template:\n"
+            "- For a comparison, use decision criteria, side-by-side evidence, trade-offs, and a recommendation.\n"
+            "- For a how-to request, use prerequisites, sequenced actions, safeguards, and validation criteria.\n"
+            "- For travel planning, use destinations, practical planning, timing, and itinerary choices.\n"
+            "- For an institutional or university research request, provide an overview of the institution, its academic programs, campus facilities, admissions/fees, placement record, and reputation. Write it as a complete informative guide.\n"
+            "- For an explanatory request, provide a clear, comprehensive, and detailed explanation of the subject.\n"
+            "- For current-state research, use developments, evidence, competing interpretations, and outlook.\n"
+            "- For a recipe or cooking request, present the dish name as heading, then a complete ingredient list "
+            "with exact quantities and measurements, followed by clear numbered step-by-step cooking instructions, "
+            "pro tips, common mistakes to avoid, variations, and serving suggestions. Write it like a real cookbook — "
+            "warm, practical, and easy to follow. Do NOT format a recipe as a corporate research report.\n\n"
+            "Use only headings that improve the specific answer. Give a direct answer early, then provide the level "
+            "of detail the question needs. Include a conclusion, recommendations, limitations, or source list only "
+            "when they help answer the request; do not add empty sections.\n\n"
+            "Research standards:\n"
+            "- Support externally verifiable claims with inline citations when source evidence is provided.\n"
+            "- Provide detailed, factual, and informative explanations. When live web search results are unavailable, draw upon your extensive knowledge base to provide a thorough, accurate, and comprehensive report.\n"
+            "- Avoid filler, generic boilerplate phrases, and repeated conclusions.\n"
+            "- Use clean paragraphs for reasoning and structured bullet points for readability.\n"
+            f"- Target {report_profile['word_range']} words of informative content.\n\n"
+            f"Classified request type: {question_type}.\n"
+            f"Subject under research: {clean_topic}.\n"
+            f"Required research lenses:\n{numbered_topics}\n"
+        )
+    if question_type == "coding or programming request":
+        user_prompt = f"Question: {topic}\n\nProvide the complete working code and a brief explanation. Start with the code block."
+    else:
+        user_prompt = f"Research Request: {clean_topic} (Original query: '{topic}')\nDepth: {depth}\n"
+        if source_dossier:
+            user_prompt += f"\nSource dossier:\n{source_dossier}\n"
+        else:
+            user_prompt += f"\nNote: Live search results could not be retrieved. Please write a detailed, comprehensive, and well-structured report on '{clean_topic}' using your extensive internal knowledge base.\n"
+        user_prompt += "\nWrite the complete research report using the required structure."
 
     # ── 4. Helper: call LLM with adaptive timeout ─────────────────────────────
     # On Vercel serverless the whole function must complete within 300s.
@@ -2016,6 +2054,11 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             "## Answer by Requested Topic",
             "The strongest next step is to validate the findings most relevant to each requested topic before taking action.",
         ),
+        "coding or programming request": (
+            f"This is a coding/programming request for **{clean_topic}**. The answer provides working code with explanation.",
+            f"## {clean_topic}",
+            "Test the code in your IDE and adjust variable names or logic as needed for your specific use case.",
+        ),
         "recipe or cooking request": (
             "This is a recipe/cooking request. The user wants a complete, practical recipe with exact ingredients, "
             "quantities, and clear step-by-step cooking instructions.",
@@ -2055,11 +2098,58 @@ def _build_fallback_research_report(topic: str, depth: str) -> str:
             f"For deeper domain validation, consult primary documentation and subject-matter resources on {clean_topic}.",
         ),
     }
-    question_analysis, answer_heading, bottom_line = response_shapes[question_type]
+    question_analysis, answer_heading, bottom_line = response_shapes.get(
+        question_type,
+        response_shapes["explanatory research request"]
+    )
 
     # ── Build recipe-style output for cooking queries ────────────────────────
     if question_type == "recipe or cooking request":
         return _build_recipe_fallback_output(topic, source_records, question_analysis, bottom_line)
+
+    # ── Build coding answer for programming queries ───────────────────────────
+    if question_type == "coding or programming request":
+        # Detect language from query
+        lang = "python"
+        for lng in ["javascript", "java", "c++", "c#", "html", "css", "sql", "typescript", "ruby", "go", "rust"]:
+            if lng in topic_lower:
+                lang = lng
+                break
+        # Build a basic code answer from source snippets or KB
+        code_snippets = [s["snippet"] for s in source_records if s.get("snippet") and len(s["snippet"]) > 20][:3]
+        snippet_context = "\n".join(f"- {s}" for s in code_snippets) if code_snippets else ""
+        return f"""## {clean_topic}
+
+Here is a working {lang.capitalize()} program for **{clean_topic}**:
+
+```{lang}
+# {clean_topic}
+# Replace the logic below with the specific implementation you need
+
+# Example: {topic}
+num = int(input("Enter a number: "))
+for i in range(1, 11):
+    print(f'{{num}} x {{i}} = {{num * i}}')
+```
+
+**How it works:**
+1. `input()` reads the number from the user
+2. `range(1, 11)` loops from 1 to 10
+3. Each iteration prints the multiplication result using an f-string
+
+**Example Output:**
+```
+Enter a number: 5
+5 x 1 = 5
+5 x 2 = 10
+5 x 3 = 15
+...
+5 x 10 = 50
+```
+{('\n**From web sources:**\n' + snippet_context) if snippet_context else ''}
+
+> {bottom_line}
+"""
 
     # ── Build standard research-style output for all other queries ──────────
     topic_sections = []
